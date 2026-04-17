@@ -141,16 +141,16 @@ export class UIManager {
         }
 
         const header = el('header', { class: 'workspace-header' }, [
-            el('h1', { text: 'TPEN-Prompts' }),
+            el('h1', { text: 'TPEN AI Prompt Builder' }),
             meta
         ])
 
-        let preview = null
-        if (thumb && isSafeHttpUrl(thumb)) {
-            const img = el('img', { alt: 'Page thumbnail' })
-            img.src = thumb
-            preview = el('figure', { class: 'canvas-preview' }, [img])
-        }
+        // let preview = null
+        // if (thumb && isSafeHttpUrl(thumb)) {
+        //     const img = el('img', { alt: 'Page thumbnail' })
+        //     img.src = thumb
+        //     preview = el('figure', { class: 'canvas-preview' }, [img])
+        // }
 
         const select = el('select', { id: 'template-select' })
         for (const t of listTemplates()) {
@@ -170,17 +170,17 @@ export class UIManager {
 
         const warning = el('div', { class: 'warning', attrs: { role: 'note' } }, [
             el('strong', { text: 'Security: ' }),
-            document.createTextNode('the generated prompt carries your TPEN session token so an agentic LLM can POST on your behalf. The token is truncated in the preview below for readability — clicking Copy writes the full token to your clipboard. Only paste it into LLM environments you trust.')
+            document.createTextNode(`The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust.`)
         ])
 
         this.#replace(el('section', { class: 'card' }, [
             header,
-            preview,
+            warning,
+            //preview,
             el('div', { class: 'controls' }, [
-                el('label', {}, [el('span', { text: 'Template' }), select]),
+                el('label', {}, [el('span', { text: 'Prompt Options' }), select]),
                 generateBtn
             ]),
-            warning,
             el('label', { class: 'output-label', htmlFor: 'output', text: 'Generated prompt' }),
             output,
             el('div', { class: 'controls' }, [copyBtn, feedback])
