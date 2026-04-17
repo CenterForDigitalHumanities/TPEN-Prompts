@@ -1,0 +1,17 @@
+title: TPEN Prompts
+
+collections:
+  pages:
+    output: true
+    permalink: /:path/
+  tools:
+    output: true
+    permalink: /tools/:name
+
+defaults:
+  - scope:
+      path: ""
+      type: tools
+    values:
+      layout: null
+      sitemap: false
