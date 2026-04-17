@@ -62,6 +62,7 @@ export const firstLineDetectionTemplate = {
         const { width, height } = canvasDimensions(canvas)
         const dims = (width && height) ? `${width} × ${height}` : 'unknown (use the IIIF Image API info.json)'
         const userAgentURI = getAgentIRIFromToken(token) ?? '(unable to resolve agent IRI from token)'
+        const pageEndpoint = lineEndpoint ? lineEndpoint.replace(/\/line$/, '') : '(unknown page endpoint)'
         return `# Task: detect the first text line on a TPEN3 page and create a line annotation
 
 You are an agentic assistant with HTTP and image-analysis capabilities. Perform the task below end to end and stop only when the line has been persisted via TPEN Services.
@@ -77,14 +78,25 @@ You are an agentic assistant with HTTP and image-analysis capabilities. Perform 
 
 ## Precondition
 
-Before doing anything else, confirm you can actually see images. If you cannot load and visually analyze the page image (no vision capability, image fetch blocked, format unreadable, etc.), **abort immediately**. Do not guess, estimate, or hallucinate coordinates from the filename, canvas dimensions, or prior knowledge. Report:
-- that you are aborting,
-- the specific reason (e.g., "no image-analysis capability", "image fetch returned 403", "unsupported format"),
-- and the URL you attempted.
+You must be able to load the page image as raw bytes and measure pixel coordinates on it; a fetch that returns only a text/prose description (e.g., a text-only-model URL fetcher) does not count — treat that as no vision capability. If you cannot see the image (no vision, fetch blocked, format unreadable), **abort immediately** — do not guess or hallucinate coordinates, and do not POST. Report: that you are aborting, the reason (e.g., "no image-analysis capability", "fetch returned 403", "unsupported format"), and the URL you attempted.
 
-What does *not* count as image analysis: a fetch primitive that returns a text summary or prose description of the page (e.g., a URL fetcher backed by a text-only model). You must be able to load the raw bytes as an image and measure pixel coordinates on it. If your only option is to ask another service to describe the image, treat that as "no vision capability" and abort.
+## Abort if the page already has lines
 
-Do not POST anything to TPEN Services in this case.
+Before doing any image work, confirm the page is empty. GET the page:
+
+\`\`\`
+GET ${pageEndpoint}
+Accept: application/json
+Authorization: Bearer ${token}
+\`\`\`
+
+Inspect the response for existing line annotations. A TPEN page is a IIIF AnnotationPage; lines appear under \`items\`. If the page already has one or more line annotations, **abort immediately**. This tool only seeds the first line on an empty page.
+
+Report: that you are aborting, the reason (\`page already has line(s)\`). Only proceed to step 1 below if the page contains zero line annotations. If the GET itself fails (401/403/404/5xx), abort and report the status rather than guessing the page is empty.
+
+## Environment limits
+
+Use only tools already present. Do not \`sudo\`, install packages (apt/pip/npm/brew/etc.), bootstrap package managers, modify PATH, or create venvs. A missing tool means use the step 4 fallback and flag verification DEGRADED; if no capability at all, abort per Precondition.
 
 ## Steps
 
@@ -105,13 +117,24 @@ Do not POST anything to TPEN Services in this case.
 
    This ratio absorbs both stages (canvas↔native and native↔derivative) in one step, so you do not need to compute an intermediate native-pixel box. Final \`x, y, w, h\` emitted in the annotation MUST be in canvas coordinates.
 
-2. Identify the bounding box of the FIRST visible text line on the page — the topmost line of the primary text block, reading order aware (top-to-bottom, left-to-right unless the script dictates otherwise). Ignore marginalia, running heads, decorations, and rubrics unless the first line *is* one of those. Fallback: on a page without discernable text bodies treat the first substantial inked line as the first line.
-
-   This is a **seed line** — the human will adjust it in the TPEN UI, so a slightly generous box is preferable to one that clips ascenders or descenders.
+2. Identify the bounding box of the FIRST visible text line on the page — the topmost line of the primary text block, reading order aware (top-to-bottom, left-to-right unless the script dictates otherwise). Ignore marginalia, running heads, decorations, and rubrics unless the first line *is* one of those. Fallback: on a page without discernable text bodies treat the first substantial inked line as the first line. This is a **seed line** — the human will adjust it in the TPEN UI, so a slightly generous box is preferable to one that clips ascenders or descenders.
 
 3. Express the box as \`x, y, w, h\` in canvas coordinates. Clamp to the canvas: enforce \`x >= 0\`, \`y >= 0\`, \`x + w <= canvas width\`, \`y + h <= canvas height\`. If your initial measurement violates these, clamp rather than discard. Round to integers after clamping.
 
-4. Construct a W3C Web Annotation with this exact shape:
+4. Verify the box before committing. Fetch a crop covering your exact \`x, y, w, h\` and load the bytes as an image (a prose summary does not count). IIIF region syntax expects **native** pixels, so if native ≠ canvas convert back first:
+
+   \`\`\`
+   x_native = x_canvas * (native_width  / canvas_width)
+   y_native = y_canvas * (native_height / canvas_height)
+   w_native = w_canvas * (native_width  / canvas_width)
+   h_native = h_canvas * (native_height / canvas_height)
+   \`\`\`
+
+   Then GET \`{service-base}/{x_native},{y_native},{w_native},{h_native}/max/0/default.jpg\` and inspect it. The crop must clearly contain the first text line and little else. If it shows decoration, whitespace, the wrong line, or clips ascenders/descenders, re-measure from step 2 — do not nudge numbers. Do not POST an unverified box.
+
+   For non-IIIF sources, use a local crop tool (ImageMagick/PIL/sips/ffmpeg) for the same region check. If no crop tool is available, re-examine the region on the highest-resolution derivative you can fetch and flag verification DEGRADED.
+
+5. Construct a W3C Web Annotation with this exact shape:
 
 \`\`\`json
 {
@@ -132,9 +155,9 @@ Do not POST anything to TPEN Services in this case.
 }
 \`\`\`
 
-Leave \`body\` as an empty array — transcription text is not part of this task. Do not include \`id\`, \`_createdAt\`, or \`_modifiedAt\`; TPEN Services assigns those on create.
+\`body\` stays empty (no transcription here); omit \`id\`, \`_createdAt\`, \`_modifiedAt\` — TPEN assigns them on create.
 
-5. POST it to TPEN Services. Send the annotation JSON from step 4 as the request body (raw JSON, not form-encoded, not wrapped):
+6. POST it to TPEN Services. Send the annotation JSON from step 5 as the request body (raw JSON, not form-encoded, not wrapped):
 
 \`\`\`
 POST ${lineEndpoint}
@@ -142,21 +165,16 @@ Content-Type: application/json
 Accept: application/json
 Authorization: Bearer ${token}
 
-Body: <the exact JSON object from step 4>
+Body: <the exact JSON object from step 5>
 \`\`\`
 
-Response handling:
-- \`201 Created\` — success. Capture the returned Line JSON for output.
-- \`401 Unauthorized\` — the token is bad. Stop and report; do not attempt a different endpoint.
-- \`403 Forbidden\` — you cannot do this. Stop and report; do not attempt a different endpoint.
-- \`409 Conflict\` — Cannot overwrite the Page because you have an outdated version. Stop and report; do not attempt a different endpoint.
-- \`502 Proxy Error\` — An upstream service had an error.  Stop and report; do not attempt a different endpoint.
-- \`Any other non-2xx\` — Stop and report; do not attempt a different endpoint. Do not retry silently.
+Response handling: on \`201 Created\`, capture the returned Line JSON. On any non-2xx (\`401\` bad token, \`403\` forbidden, \`409\` outdated page version, \`502\` upstream error, or anything else), stop and report — do not retry silently and do not try a different endpoint.
 
 ## Output
 
 Return, in this order:
 - One short sentence justifying the chosen box (e.g., "topmost dark ink band at y≈420, spans the writing block").
+- A one-line verification note describing how you confirmed the box in step 4: \`verified via IIIF region crop\`, \`verified via local crop tool (<tool name>)\`, or \`verification DEGRADED: non-IIIF source with no crop tool; re-examined on full-resolution derivative\`.
 - The final annotation JSON you sent.
 - The HTTP status and response body from TPEN Services.
 
