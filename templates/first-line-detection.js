@@ -147,9 +147,11 @@ Body: <the exact JSON object from step 4>
 
 Response handling:
 - \`201 Created\` — success. Capture the returned Line JSON for output.
-- \`409 Conflict\` — a line already exists for this target. Stop, do not retry, and report the existing line (from the response body if provided).
-- \`403 Forbidden\` — the token lacks CREATE permission on LINE for this project. Stop and report; do not attempt a different endpoint.
-- Any other non-2xx — report the request (method, URL, body) and the full response (status + body). Do not retry silently.
+- \`401 Unauthorized\` — the token is bad. Stop and report; do not attempt a different endpoint.
+- \`403 Forbidden\` — you cannot do this. Stop and report; do not attempt a different endpoint.
+- \`409 Conflict\` — Cannot overwrite the Page because you have an outdated version. Stop and report; do not attempt a different endpoint.
+- \`502 Proxy Error\` — An upstream service had an error.  Stop and report; do not attempt a different endpoint.
+- \`Any other non-2xx\` — Stop and report; do not attempt a different endpoint. Do not retry silently.
 
 ## Output
 

@@ -30,11 +30,11 @@ export const ENVIRONMENTS = {
     },
     dev: {
         servicesURL: 'https://dev.api.t-pen.org',
-        TPEN3URL: 'https://three.t-pen.org'
+        TPEN3URL: 'http://localhost:4000'
     },
     prod: {
         servicesURL: 'https://api.t-pen.org',
-        TPEN3URL: 'https://three.t-pen.org'
+        TPEN3URL: 'https://app.t-pen.org'
     }
 }
 
