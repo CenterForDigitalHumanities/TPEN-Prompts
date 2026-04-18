@@ -55,6 +55,20 @@ Credential policy:
 - For Canvas/Manifest fetches and other open routes, do not use a credentials header.
 - Avoid `credentials: "include"` on cross-origin endpoints that return wildcard CORS headers.
 
+## Read-Only Model Fallback (Browser Submit)
+
+If a model can GET resources but cannot perform PUT/POST/PATCH calls itself, the model should still produce a save-ready JSON payload and a short instruction.
+
+Fallback contract:
+
+1. Model returns a brief instruction and one serialized JSON payload.
+2. User opens the split-tool "Manual TPEN Update" section.
+3. User selects one operation and pastes payload:
+  - `Update Page` -> PUT `/project/:projectId/page/:pageId`
+  - `Update Columns` -> `/project/:projectId/page/:pageId/column` (POST/PUT/PATCH inferred from payload shape)
+  - `Update Lines` -> PATCH `/project/:projectId/page/:pageId/line/:lineId/text`
+4. Browser fires authenticated fetch to TPEN using the user's token.
+
 ## GET: Project and Open Resources
 
 Use authenticated GET for project metadata and open GET for Canvas/Manifest resources.

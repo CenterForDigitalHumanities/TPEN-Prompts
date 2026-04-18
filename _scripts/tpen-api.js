@@ -65,7 +65,7 @@ const normalizeLineCandidate = (candidate, index) => {
     ? "pct"
     : null
 
-  if (rawUnit !== "percent" && rawUnit !== "pct") {
+  if (rawUnit && rawUnit !== "percent" && rawUnit !== "pct") {
     throw new Error(`Line ${ index + 1 }: bounds.unit must be omitted for Canvas-dimension coordinates or set to ''pct'' for percentages`)
   }
 

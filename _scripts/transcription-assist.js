@@ -12,10 +12,15 @@ const state = {
   origin: null
 }
 
+const API_BASE = "https://api.t-pen.org"
+
 const byId = (id) => document.getElementById(id)
 
 const statusEl = byId("status")
 const promptOutputEl = byId("promptOutput")
+const manualPageJsonEl = byId("manualPageJson")
+const manualColumnsJsonEl = byId("manualColumnsJson")
+const manualLinesJsonEl = byId("manualLinesJson")
 
 const setStatus = (message) => {
   statusEl.textContent = message
@@ -320,6 +325,155 @@ const parseLLMOutput = (jsonString) => {
   }
 }
 
+const parseJsonTextarea = (element, operationName) => {
+  const raw = element?.value?.trim() ?? ""
+  if (!raw) {
+    throw new Error(`${ operationName }: paste a JSON payload first`)
+  }
+
+  try {
+    return JSON.parse(raw)
+  } catch {
+    throw new Error(`${ operationName }: payload must be valid JSON`)
+  }
+}
+
+const fetchTpenWithJson = async ({ token, url, method, payload }) => {
+  const headers = {
+    "Content-Type": "application/json"
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${ token }`
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: JSON.stringify(payload),
+    credentials: "include"
+  })
+
+  if (!response.ok) {
+    throw new Error(`TPEN API ${ response.status }: ${ await response.text() }`)
+  }
+
+  const text = await response.text()
+  if (!text.trim()) {
+    return null
+  }
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
+}
+
+const inferColumnMethod = (payload) => {
+  if (payload && typeof payload === "object") {
+    if (Array.isArray(payload.columnLabelsToMerge) && payload.newLabel) {
+      return "PUT"
+    }
+
+    if (Array.isArray(payload.annotationIdsToAdd) && payload.columnLabel) {
+      return "PATCH"
+    }
+  }
+
+  return "POST"
+}
+
+const submitManualPageUpdate = async () => {
+  if (!state.context.idToken) {
+    setStatus("Request ID token before submitting manual updates.")
+    return
+  }
+
+  try {
+    const pageCtx = getPageContext(state.context)
+    const payload = parseJsonTextarea(manualPageJsonEl, "Update Page")
+    const url = `${ API_BASE }/project/${ pageCtx.projectId }/page/${ pageCtx.pageId }`
+
+    setStatus("Submitting Update Page...")
+    await fetchTpenWithJson({
+      token: pageCtx.idToken,
+      url,
+      method: "PUT",
+      payload
+    })
+    setStatus("Update Page submitted successfully.")
+  } catch (error) {
+    setStatus(`Error: ${ error.message }`)
+  }
+}
+
+const submitManualColumnsUpdate = async () => {
+  if (!state.context.idToken) {
+    setStatus("Request ID token before submitting manual updates.")
+    return
+  }
+
+  try {
+    const pageCtx = getPageContext(state.context)
+    const payload = parseJsonTextarea(manualColumnsJsonEl, "Update Columns")
+    const method = inferColumnMethod(payload)
+    const url = `${ API_BASE }/project/${ pageCtx.projectId }/page/${ pageCtx.pageId }/column`
+
+    setStatus(`Submitting Update Columns (${ method })...`)
+    await fetchTpenWithJson({
+      token: pageCtx.idToken,
+      url,
+      method,
+      payload
+    })
+    setStatus(`Update Columns submitted successfully via ${ method }.`)
+  } catch (error) {
+    setStatus(`Error: ${ error.message }`)
+  }
+}
+
+const submitManualLinesUpdate = async () => {
+  if (!state.context.idToken) {
+    setStatus("Request ID token before submitting manual updates.")
+    return
+  }
+
+  try {
+    const pageCtx = getPageContext(state.context)
+    const payload = parseJsonTextarea(manualLinesJsonEl, "Update Lines")
+    const lineId = `${ payload.lineId ?? payload.id ?? "" }`.trim()
+    const textValue = `${ payload.text ?? payload.value ?? "" }`
+
+    if (!lineId) {
+      throw new Error("Update Lines: payload must include lineId")
+    }
+
+    const headers = {
+      "Content-Type": "text/plain",
+      Authorization: `Bearer ${ pageCtx.idToken }`
+    }
+
+    const url = `${ API_BASE }/project/${ pageCtx.projectId }/page/${ pageCtx.pageId }/line/${ lineId }/text`
+    setStatus("Submitting Update Lines (PATCH)...")
+
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers,
+      body: textValue,
+      credentials: "include"
+    })
+
+    if (!response.ok) {
+      throw new Error(`TPEN API ${ response.status }: ${ await response.text() }`)
+    }
+
+    setStatus("Update Lines submitted successfully.")
+  } catch (error) {
+    setStatus(`Error: ${ error.message }`)
+  }
+}
+
 const saveLLMCandidates = async () => {
   const promptText = promptOutputEl.value
   if (!promptText.trim()) {
@@ -370,6 +524,9 @@ byId("copyPromptBtn")?.addEventListener("click", copyPrompt)
 byId("saveAnnotationsBtn")?.addEventListener("click", saveLLMCandidates)
 byId("requestContextBtn")?.addEventListener("click", requestContext)
 byId("requestIdTokenBtn")?.addEventListener("click", requestIdToken)
+byId("submitManualPageBtn")?.addEventListener("click", submitManualPageUpdate)
+byId("submitManualColumnsBtn")?.addEventListener("click", submitManualColumnsUpdate)
+byId("submitManualLinesBtn")?.addEventListener("click", submitManualLinesUpdate)
 
 subscribeToContext((context, origin) => {
   state.context = {

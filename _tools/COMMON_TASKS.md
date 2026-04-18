@@ -32,6 +32,10 @@ Run these checks first. If any check fails, stop and return a concise failure re
 - Model can fetch internet resources (Canvas URI, Manifest URI, TPEN API endpoints)
 - Model can perform HTTP write operations: PUT, POST, and PATCH
 - If PATCH is unavailable but POST with method override is supported, use fallback
+- If model can GET resources but cannot perform write operations, switch to browser-submit fallback mode:
+  - Return a brief instruction plus a serialized JSON payload for one target operation
+  - Tell the user to open the Manual TPEN Update section and choose `Update Page`, `Update Columns`, or `Update Lines`
+  - User submits that payload from the browser, which performs the fetch to TPEN
 
 1. Authorization readiness.
 
@@ -78,6 +82,7 @@ Apply this boilerplate in all successful workflows.
 
 - On success: what was saved, where, and count summary
 - On failure: exact stage and error details, with next corrective action
+- In browser-submit fallback mode, report which operation the user must select and the payload they should paste
 
 ## Task Workflows
 

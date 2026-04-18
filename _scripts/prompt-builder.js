@@ -1,12 +1,8 @@
 const DEFAULT_INSTRUCTIONS = [
-  "You are assisting with historical manuscript transcription.",
-  "Load the page image and detect all text lines.",
-  "Transcribe each line faithfully.",
-  "Return line bounds as Canvas-dimension coordinates when possible, and omit the unit for those coordinates.",
-  "Use \"pct\" only if percentage bounds are absolutely necessary, and avoid that unless required.",
-  "Use decimals when needed for precision.",
-  "Keep uncertain letters in square brackets like [a?].",
-  "Do not normalize spelling unless instructed."
+  "You are assisting with TPEN manuscript transcription.",
+  "Use the instruction files below as the authoritative contract for task flow, geometry rules, API behavior, and fallback handling.",
+  "Do not restate or override those instruction files.",
+  "Return exactly one JSON object matching the required tool-call schema."
 ]
 
 export const buildTranscriptionPrompt = (context = {}) => {
@@ -32,6 +28,14 @@ export const buildTranscriptionPrompt = (context = {}) => {
 
   return [
     ...DEFAULT_INSTRUCTIONS,
+    "",
+    "Instruction Files (authoritative):",
+    "- _tools/COMMON_TASKS.md",
+    "- _tools/IMAGE_ANALYSIS.md",
+    "- _tools/HANDWRITING_TEXT_RECOGNITION.md",
+    "- _tools/TPEN_API.md",
+    "",
+    "Default task when not otherwise specified: COMMON_TASKS.md -> 'Bounds Detection Followed by Text Recognition'.",
     "",
     "Context:",
     `Project ID: ${projectId ?? "unknown"}`,

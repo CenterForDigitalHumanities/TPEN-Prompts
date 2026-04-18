@@ -147,6 +147,71 @@ permalink: /split-tools/transcription-assist/
       grid-template-columns: 1fr;
     }
   }
+
+  .full-width {
+    grid-column: 1 / -1;
+  }
+
+  details.manual-submit {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #fdfaf3;
+  }
+
+  details.manual-submit summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .manual-intro {
+    margin: 10px 0 14px;
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  .manual-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .manual-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    background: #fff;
+  }
+
+  .manual-card h3 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+  }
+
+  .manual-card p {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .manual-card textarea {
+    min-height: 130px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.84rem;
+    background: #fffdf8;
+  }
+
+  .manual-card button {
+    margin-top: 8px;
+    width: 100%;
+  }
+
+  @media (max-width: 980px) {
+    .manual-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 
 <script type="module" src="/scripts/transcription-assist.js"></script>
@@ -186,5 +251,38 @@ permalink: /split-tools/transcription-assist/
       <button id="copyPromptBtn" class="secondary" type="button">Copy Prompt</button>
     </div>
     <div class="status" id="status">No context yet.</div>
+  </section>
+
+  <section class="panel full-width">
+    <details class="manual-submit">
+      <summary>Manual TPEN Update (Fallback for Read-Only Models)</summary>
+      <p class="manual-intro">
+        If your model can only GET resources, have it return a short instruction and a serialized JSON payload.
+        Paste the payload into the matching box below and submit from this browser to call TPEN.
+      </p>
+
+      <div class="manual-grid">
+        <div class="manual-card">
+          <h3>Update Page</h3>
+          <p>PUT <code>/project/:projectId/page/:pageId</code> with a Page JSON body (typically containing <code>items</code>).</p>
+          <textarea id="manualPageJson" aria-label="Manual page JSON payload"></textarea>
+          <button id="submitManualPageBtn" class="secondary" type="button">Submit Update Page</button>
+        </div>
+
+        <div class="manual-card">
+          <h3>Update Columns</h3>
+          <p>Paste JSON for create, merge, or patch. Method is inferred automatically for the column endpoint.</p>
+          <textarea id="manualColumnsJson" aria-label="Manual columns JSON payload"></textarea>
+          <button id="submitManualColumnsBtn" class="secondary" type="button">Submit Update Columns</button>
+        </div>
+
+        <div class="manual-card">
+          <h3>Update Lines</h3>
+          <p>Paste JSON with <code>lineId</code> and <code>text</code> (or <code>value</code>) for line text patch.</p>
+          <textarea id="manualLinesJson" aria-label="Manual lines JSON payload"></textarea>
+          <button id="submitManualLinesBtn" class="secondary" type="button">Submit Update Lines</button>
+        </div>
+      </div>
+    </details>
   </section>
 </main>
