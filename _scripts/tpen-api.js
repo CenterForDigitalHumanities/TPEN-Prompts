@@ -32,8 +32,8 @@ const normalizeCoord = (value, fieldName) => {
 
 const buildSelectorValue = (bounds) => {
   const { x, y, w, h, unit } = bounds
-  const prefix = unit === "percent" ? "pct" : "pixel"
-  return `xywh=${ prefix }:${ x },${ y },${ w },${ h }`
+  const prefix = unit === "pct" ? "pct:" : ""
+  return `xywh=${ prefix }${ x },${ y },${ w },${ h }`
 }
 
 const normalizeLineCandidate = (candidate, index) => {
@@ -60,12 +60,16 @@ const normalizeLineCandidate = (candidate, index) => {
     throw new Error(`Line ${ index + 1 }: width and height must be positive`)
   }
 
-  const unit = bounds.unit ?? "pixel"
-  if (unit !== "pixel" && unit !== "percent") {
-    throw new Error(`Line ${ index + 1 }: bounds.unit must be ''pixel'' or ''percent''`)
+  const rawUnit = `${ bounds.unit ?? "" }`.trim().toLowerCase()
+  const unit = rawUnit === "percent" || rawUnit === "pct"
+    ? "pct"
+    : null
+
+  if (rawUnit !== "percent" && rawUnit !== "pct") {
+    throw new Error(`Line ${ index + 1 }: bounds.unit must be omitted for Canvas-dimension coordinates or set to ''pct'' for percentages`)
   }
 
-  if (unit === "percent" && (x > 100 || y > 100 || x + w > 100 || y + h > 100)) {
+  if (unit === "pct" && (x > 100 || y > 100 || x + w > 100 || y + h > 100)) {
     throw new Error(`Line ${ index + 1 }: percent bounds exceed canvas [0,100]`)
   }
 
@@ -106,11 +110,24 @@ export const getPageContext = (context = {}) => {
   const projectId = asString(context.projectId, "projectId")
   const pageId = asString(context.pageId, "pageId")
   const canvasId = asString(context.canvasId, "canvasId")
+  const manifestUri = context.manifestUri || null
   const imageUrl = context.imageUrl || ""
   const creatorAgent = context.creatorAgent || context.creator || ""
   const idToken = context.idToken || null
+  const canvasWidth = Number.isFinite(context.canvasWidth) ? context.canvasWidth : null
+  const canvasHeight = Number.isFinite(context.canvasHeight) ? context.canvasHeight : null
 
-  return { projectId, pageId, canvasId, imageUrl, creatorAgent, idToken }
+  return {
+    projectId,
+    pageId,
+    canvasId,
+    manifestUri,
+    canvasWidth,
+    canvasHeight,
+    imageUrl,
+    creatorAgent,
+    idToken
+  }
 }
 
 export const validateCandidates = (candidates = []) => {

@@ -7,6 +7,9 @@ collections:
   tools:
     output: true
     permalink: /tools/:name
+  scripts:
+    output: true
+    permalink: /scripts/:name/
 
 defaults:
   - scope:
