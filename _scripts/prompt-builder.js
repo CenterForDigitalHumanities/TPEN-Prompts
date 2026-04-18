@@ -2,8 +2,38 @@ const DEFAULT_INSTRUCTIONS = [
   "You are assisting with TPEN manuscript transcription.",
   "Use the instruction files below as the authoritative contract for task flow, geometry rules, API behavior, and fallback handling.",
   "Do not restate or override those instruction files.",
-  "Return exactly one JSON object matching the required tool-call schema."
+  "Do not invent transcription lines or bounds when required evidence is unavailable.",
+  "Only produce the save JSON payload when explicitly asked to provide save-ready output."
 ]
+
+const buildToolsBaseUrl = () => {
+  if (typeof window === "undefined" || !window.location) {
+    return "/tools"
+  }
+
+  const { origin, pathname } = window.location
+  const splitToolsMarker = "/split-tools/"
+  const markerIndex = pathname.indexOf(splitToolsMarker)
+
+  if (markerIndex >= 0) {
+    const basePrefix = pathname.slice(0, markerIndex)
+    return `${ origin }${ basePrefix }/tools`
+  }
+
+  const trimmedPath = pathname.endsWith("/") ? pathname.slice(0, -1) : pathname
+  const parentPath = trimmedPath.slice(0, Math.max(0, trimmedPath.lastIndexOf("/")))
+  return `${ origin }${ parentPath }/tools`
+}
+
+const buildInstructionFileUrls = () => {
+  const base = buildToolsBaseUrl()
+  return [
+    `${ base }/COMMON_TASKS.md`,
+    `${ base }/IMAGE_ANALYSIS.md`,
+    `${ base }/HANDWRITING_TEXT_RECOGNITION.md`,
+    `${ base }/TPEN_API.md`
+  ]
+}
 
 const chooseDefaultTask = (context = {}) => {
   const hasLineArray = Array.isArray(context.lines) && context.lines.length > 0
@@ -35,6 +65,7 @@ export const buildTranscriptionPrompt = (context = {}) => {
     canvasId,
     canvasWidth,
     canvasHeight,
+    idToken,
     imageUrl,
     lines
   } = context
@@ -48,15 +79,13 @@ export const buildTranscriptionPrompt = (context = {}) => {
     : "- (No existing lines; detect new lines from the image.)"
 
   const defaultTask = chooseDefaultTask(context)
+  const instructionFileUrls = buildInstructionFileUrls()
 
   return [
     ...DEFAULT_INSTRUCTIONS,
     "",
     "Instruction Files (authoritative):",
-    "- _tools/COMMON_TASKS.md",
-    "- _tools/IMAGE_ANALYSIS.md",
-    "- _tools/HANDWRITING_TEXT_RECOGNITION.md",
-    "- _tools/TPEN_API.md",
+    ...instructionFileUrls.map((url) => `- ${ url }`),
     "",
     `Default task when not otherwise specified: COMMON_TASKS.md -> '${ defaultTask }'.`,
     "",
@@ -68,6 +97,7 @@ export const buildTranscriptionPrompt = (context = {}) => {
     `Canvas ID: ${canvasId ?? "unknown"}`,
     `Canvas Width: ${canvasWidth ?? "unknown"}`,
     `Canvas Height: ${canvasHeight ?? "unknown"}`,
+    `ID Token: ${idToken ?? "unknown"}`,
     "",
     "Image URL:",
     imageUrl ?? "unknown",
@@ -75,7 +105,7 @@ export const buildTranscriptionPrompt = (context = {}) => {
     "Existing or expected lines:",
     lineHints,
     "",
-    "Return ONLY JSON in this tool-call format:",
+    "When explicitly asked for save-ready output, return JSON in this tool-call format:",
     "{",
     '  "tool": "save_tpen_annotations",',
     '  "arguments": {',
@@ -88,6 +118,7 @@ export const buildTranscriptionPrompt = (context = {}) => {
     '  }',
     "}",
     "",
-    "Do not include markdown, prose, or explanations outside the JSON object."
+    "If you are not explicitly asked for save-ready output yet, provide normal analysis/explanation instead of JSON.",
+    "If required resources are inaccessible, state what is missing and do not fabricate candidates."
   ].join("\n")
 }
