@@ -5,6 +5,27 @@ const DEFAULT_INSTRUCTIONS = [
   "Return exactly one JSON object matching the required tool-call schema."
 ]
 
+const chooseDefaultTask = (context = {}) => {
+  const hasLineArray = Array.isArray(context.lines) && context.lines.length > 0
+  const hasCurrentLine = `${ context.currentLineId ?? "" }`.trim().length > 0
+  const hasLineHints = hasLineArray || hasCurrentLine
+
+  const columnCount = Number(context.columns)
+  const hasColumns = Array.isArray(context.columnData)
+    ? context.columnData.length > 0
+    : Number.isFinite(columnCount) && columnCount > 0
+
+  if (hasLineHints) {
+    return "Text Recognition Within Known Bounds"
+  }
+
+  if (hasColumns) {
+    return "Line Detection"
+  }
+
+  return "Bounds Detection Followed by Text Recognition"
+}
+
 export const buildTranscriptionPrompt = (context = {}) => {
   const {
     projectId,
@@ -26,6 +47,8 @@ export const buildTranscriptionPrompt = (context = {}) => {
     }).join("\n")
     : "- (No existing lines; detect new lines from the image.)"
 
+  const defaultTask = chooseDefaultTask(context)
+
   return [
     ...DEFAULT_INSTRUCTIONS,
     "",
@@ -35,7 +58,7 @@ export const buildTranscriptionPrompt = (context = {}) => {
     "- _tools/HANDWRITING_TEXT_RECOGNITION.md",
     "- _tools/TPEN_API.md",
     "",
-    "Default task when not otherwise specified: COMMON_TASKS.md -> 'Bounds Detection Followed by Text Recognition'.",
+    `Default task when not otherwise specified: COMMON_TASKS.md -> '${ defaultTask }'.`,
     "",
     "Context:",
     `Project ID: ${projectId ?? "unknown"}`,
