@@ -9,12 +9,18 @@ collections:
     permalink: /tools/:name
   scripts:
     output: true
-    permalink: /scripts/:name/
+    permalink: /scripts/:name.js
 
 defaults:
   - scope:
       path: ""
       type: tools
+    values:
+      layout: null
+      sitemap: false
+  - scope:
+      path: ""
+      type: scripts
     values:
       layout: null
       sitemap: false
