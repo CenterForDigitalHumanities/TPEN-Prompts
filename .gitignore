@@ -1,1 +1,6 @@
-/_site
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+node_modules/
