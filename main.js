@@ -9,7 +9,7 @@
  */
 
 import { resolveToken, persistToken, clearStoredToken } from './auth.js'
-import { fetchProject, fetchPage } from './tpen-service.js'
+import { fetchProject, fetchPageResolved } from './tpen-service.js'
 import { UIManager } from './ui-manager.js'
 import { MessageHandler } from './message-handler.js'
 import { initTemplates } from './prompt-generator.js'
@@ -149,19 +149,29 @@ export class PromptsApp {
     }
 
     /**
-     * Render the workspace synchronously from a TPEN_CONTEXT payload. Builds
-     * minimal `project` / `page` / `canvas` stubs that satisfy the template
-     * `buildContext` helpers and the workspace UI without any network calls.
+     * Render the workspace from a TPEN_CONTEXT payload. Builds minimal
+     * `project` / `canvas` stubs from the payload; fetches the full page when
+     * a pageID and token are available so `page.items` (line annotations) are
+     * populated for template helpers like `formatExistingLines`. Falls back to
+     * a page stub if the fetch fails.
      * @param {{ projectID: string, projectLabel?: string|null,
      *           pageID?: string|null, pageLabel?: string|null,
      *           canvasId?: string|null, canvasWidth?: number|null, canvasHeight?: number|null,
      *           imageUrl?: string|null, manifestUri?: string|null, columns?: Array }} payload
      */
-    #applyContextFromPayload(payload) {
+    async #applyContextFromPayload(payload) {
         const project = { id: payload.projectID, label: payload.projectLabel ?? payload.projectID }
-        const page = payload.pageID
-            ? { id: payload.pageID, label: payload.pageLabel ?? null, columns: payload.columns ?? [] }
-            : null
+        let page = null
+        if (payload.pageID) {
+            if (this.token) {
+                try {
+                    page = await fetchPageResolved(payload.projectID, payload.pageID, this.token)
+                } catch (err) {
+                    console.warn('fetchPageResolved failed; falling back to stub', err)
+                }
+            }
+            page ??= { id: payload.pageID, label: payload.pageLabel ?? null, columns: payload.columns ?? [] }
+        }
         const canvas = payload.canvasId ? {
             id: payload.canvasId,
             width: payload.canvasWidth ?? null,
@@ -194,7 +204,7 @@ export class PromptsApp {
         try {
             const [project, page] = await Promise.all([
                 fetchProject(args.projectID, this.token),
-                args.pageID ? fetchPage(args.projectID, args.pageID, this.token) : null
+                args.pageID ? fetchPageResolved(args.projectID, args.pageID, this.token) : null
             ])
             const canvas = page ? await resolveCanvasForPage(page) : null
             const layer = args.layerID ? findByTrailingId(project?.layers, args.layerID) : null

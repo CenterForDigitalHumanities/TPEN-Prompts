@@ -68,30 +68,24 @@ export function buildTemplateContext(ctx) {
 }
 
 /**
- * Render the current column state for a given page as a markdown bullet list.
- * Used by templates that must avoid duplicate column labels. The directly
- * fetched `page` is authoritative when supplied, since the project graph may
- * not hydrate `layer.pages[].columns` for every page.
- * @param {any} project the TPEN project object.
- * @param {string|null|undefined} pageID the short page id or full page IRI.
- * @param {any} [fetchedPage] the page object returned by `fetchPage`, preferred when available.
- * @returns {string}
- */
-/**
  * Extract an `xywh=x,y,w,h` fragment from a line annotation's target, accepting
  * both `target.selector.value` and a plain `"source#xywh=..."` string target.
+ * Strips the non-standard `pixel:` prefix introduced by Annotorious — prompts
+ * and any annotations produced downstream must use plain integer coordinates.
  * @param {any} item
  * @returns {string|null}
  */
 function extractXywh(item) {
     const sel = item?.target?.selector
     const selValue = Array.isArray(sel) ? sel[0]?.value : sel?.value
+    let raw = null
     if (typeof selValue === 'string' && selValue.includes('xywh=')) {
-        return selValue.slice(selValue.indexOf('xywh='))
+        raw = selValue.slice(selValue.indexOf('xywh='))
+    } else {
+        const target = typeof item?.target === 'string' ? item.target : null
+        if (target && target.includes('#xywh=')) raw = target.slice(target.indexOf('xywh='))
     }
-    const target = typeof item?.target === 'string' ? item.target : null
-    if (target && target.includes('#xywh=')) return target.slice(target.indexOf('xywh='))
-    return null
+    return raw ? raw.replace(/^xywh=pixel:/, 'xywh=') : null
 }
 
 /**
@@ -113,6 +107,16 @@ export function formatExistingLines(fetchedPage) {
     }).join('\n')
 }
 
+/**
+ * Render the current column state for a given page as a markdown bullet list.
+ * Used by templates that must avoid duplicate column labels. The directly
+ * fetched `page` is authoritative when supplied, since the project graph may
+ * not hydrate `layer.pages[].columns` for every page.
+ * @param {any} project the TPEN project object.
+ * @param {string|null|undefined} pageID the short page id or full page IRI.
+ * @param {any} [fetchedPage] the page object returned by `fetchPage`, preferred when available.
+ * @returns {string}
+ */
 export function formatExistingColumns(project, pageID, fetchedPage = null) {
     const tail = trailingId(pageID)
     const projectPage = (project?.layers ?? [])

@@ -56,6 +56,19 @@ export function fetchPage(projectID, pageID, token) {
 }
 
 /**
+ * Fetch a TPEN Page with its line annotations hydrated server-side. The
+ * `/resolved` variant returns each entry in `items[]` as a full Annotation
+ * (with `target.selector.value`) rather than an id/type stub.
+ * @param {string} projectID
+ * @param {string} pageID
+ * @param {string} token
+ * @returns {Promise<any>}
+ */
+export function fetchPageResolved(projectID, pageID, token) {
+    return authedGet(`/project/${encodeURIComponent(projectID)}/page/${encodeURIComponent(pageID)}/resolved`, token)
+}
+
+/**
  * Build the page endpoint URL (page/index.js). Templates use this for PUT/PATCH
  * operations that target the page or its sub-resources (lines, columns).
  * @param {string} projectID
