@@ -17,24 +17,29 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 {{existingColumns}}
 
+## Existing lines
+
+Each entry is `<lineId>: <xywh selector>` in canvas coordinates. Use these ids verbatim when assigning lines to columns.
+
+{{existingLines}}
+
 ## Preconditions
 
-1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`. If any is missing, stop and report.
+1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`, and a non-empty existing-lines list above. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes and measure pixel coordinates on it.
-3. Authorization: `{{token}}` must be usable for GET against the page endpoint and POST against the page's column endpoint.
+3. Authorization: `{{token}}` must be usable for POST against the page's column endpoint.
 4. HTTP POST capability with `Content-Type: application/json`.
 
 If any precondition fails, stop and return a concise failure report.
 
 ## Steps
 
-1. GET `{{pageEndpoint}}` with `Authorization: Bearer {{token}}` and `Accept: application/json` to load the AnnotationPage. Read `items[]` — each entry is a line annotation. For each line, extract its trailing id (the last path segment of `id` / `@id`) and its `xywh=x,y,w,h` selector value (look in `target.selector.value`, falling back to any string property containing `xywh=`). Coordinates are in canvas space.
-2. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. Otherwise GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
-3. Analyze the page image and detect column regions in reading order.
-4. For each detected column, determine which of the existing line ids fall within its bounds. A line is assigned to exactly one column.
-5. Choose a unique label per column (e.g., `Column A`, `Column B`). The label must not clash with any label listed under "Existing columns on this page".
-6. POST one column at a time via the column endpoint, with `{ label, annotations }` where `annotations` is the array of line ids assigned to that column.
-7. Report the count of created columns and any per-column failures.
+1. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. Otherwise GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
+2. Analyze the page image and detect column regions in reading order.
+3. For each detected column, determine which of the existing line ids (from the list above) fall within its bounds using each line's `xywh`. A line is assigned to exactly one column.
+4. Choose a unique label per column (e.g., `Column A`, `Column B`). The label must not clash with any label listed under "Existing columns on this page".
+5. POST one column at a time via the column endpoint, with `{ label, annotations }` where `annotations` is the array of line ids assigned to that column.
+6. Report the count of created columns and any per-column failures.
 
 ## Rules
 

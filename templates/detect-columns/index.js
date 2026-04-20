@@ -7,7 +7,7 @@
  * @author thehabes
  */
 
-import { buildTemplateContext, formatExistingColumns } from '../inject-context.js'
+import { buildTemplateContext, formatExistingColumns, formatExistingLines } from '../inject-context.js'
 
 /** @type {import('../../prompt-generator.js').PromptTemplate} */
 export const detectColumnsTemplate = {
@@ -16,6 +16,7 @@ export const detectColumnsTemplate = {
     templateUrl: new URL('./PROMPT.md', import.meta.url),
     buildContext: (ctx) => ({
         ...buildTemplateContext(ctx),
-        existingColumns: formatExistingColumns(ctx.project, ctx.pageID, ctx.page)
+        existingColumns: formatExistingColumns(ctx.project, ctx.pageID, ctx.page),
+        existingLines: formatExistingLines(ctx.page)
     })
 }

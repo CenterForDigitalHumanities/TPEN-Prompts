@@ -77,6 +77,42 @@ export function buildTemplateContext(ctx) {
  * @param {any} [fetchedPage] the page object returned by `fetchPage`, preferred when available.
  * @returns {string}
  */
+/**
+ * Extract an `xywh=x,y,w,h` fragment from a line annotation's target, accepting
+ * both `target.selector.value` and a plain `"source#xywh=..."` string target.
+ * @param {any} item
+ * @returns {string|null}
+ */
+function extractXywh(item) {
+    const sel = item?.target?.selector
+    const selValue = Array.isArray(sel) ? sel[0]?.value : sel?.value
+    if (typeof selValue === 'string' && selValue.includes('xywh=')) {
+        return selValue.slice(selValue.indexOf('xywh='))
+    }
+    const target = typeof item?.target === 'string' ? item.target : null
+    if (target && target.includes('#xywh=')) return target.slice(target.indexOf('xywh='))
+    return null
+}
+
+/**
+ * Render the current line annotations on a page as a markdown bullet list
+ * keyed by trailing line id and xywh selector. Pre-resolving this list in the
+ * parent saves the LLM a GET + parse round trip.
+ * @param {any} fetchedPage the page object returned by `fetchPage`.
+ * @returns {string}
+ */
+export function formatExistingLines(fetchedPage) {
+    const items = fetchedPage?.items ?? []
+    if (!Array.isArray(items) || items.length === 0) {
+        return '- (No existing lines on this page.)'
+    }
+    return items.map(item => {
+        const lineId = trailingId(item) ?? '(unknown)'
+        const xywh = extractXywh(item) ?? '(no xywh selector)'
+        return `- ${lineId}: ${xywh}`
+    }).join('\n')
+}
+
 export function formatExistingColumns(project, pageID, fetchedPage = null) {
     const tail = trailingId(pageID)
     const projectPage = (project?.layers ?? [])

@@ -13,24 +13,28 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 - User Agent URI: {{userAgentURI}}
 - Page endpoint: {{pageEndpoint}}
 
+## Existing lines
+
+Each entry is `<lineId>: <xywh selector>` in canvas coordinates. If the list is empty, stop — this template only revises existing lines.
+
+{{existingLines}}
+
 ## Preconditions
 
-1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`. If any is missing, stop and report.
+1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`, and a non-empty existing-lines list above. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes and crop/inspect per-line regions. A fetcher that returns only a prose description of the image does not count.
-3. Authorization: `{{token}}` must be usable for GET against the page endpoint and PATCH against each line-text endpoint.
+3. Authorization: `{{token}}` must be usable for PATCH against each line-text endpoint.
 4. HTTP PATCH capability (with `Content-Type: text/plain`).
 
 If any precondition fails, stop and return a concise failure report naming the missing capability.
 
 ## Steps
 
-1. GET `{{pageEndpoint}}` with `Authorization: Bearer {{token}}` and `Accept: application/json` to load the AnnotationPage. Read `items[]` — each entry is a line annotation. If `items` is empty, stop — this template only revises existing lines.
-2. For each line, extract its trailing id (the last path segment of `id` / `@id`) and its `xywh=x,y,w,h` selector value (look in `target.selector.value`, falling back to any string property containing `xywh=`). Coordinates are in canvas space.
-3. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. If either is `(unknown)`, GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
-4. Fetch the page image and a per-line crop. Verify each crop visibly contains a single line of inked text.
-5. Run handwriting text recognition over each crop. Apply the recognition rules below.
-6. For each line, PATCH the text to its line-text endpoint.
-7. Report a per-line summary: how many succeeded, how many failed, and the HTTP status for any failure.
+1. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. If either is `(unknown)`, GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
+2. Fetch the page image and a per-line crop using each line's `xywh` from the list above. Verify each crop visibly contains a single line of inked text.
+3. Run handwriting text recognition over each crop. Apply the recognition rules below.
+4. For each line, PATCH the text to its line-text endpoint.
+5. Report a per-line summary: how many succeeded, how many failed, and the HTTP status for any failure.
 
 ## Rules
 
