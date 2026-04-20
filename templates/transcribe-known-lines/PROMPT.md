@@ -1,0 +1,81 @@
+# Task: transcribe the existing lines on a TPEN3 page
+
+You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services.
+
+## Context
+
+- Project: {{projectID}}
+- Page: {{pageID}}
+- Canvas: {{canvasId}}
+- Canvas Dimensions: {{canvasWidth}} × {{canvasHeight}}
+- Image: {{imageUrl}}
+- Manifest: {{manifestUri}}
+- User Agent URI: {{userAgentURI}}
+- Page endpoint: {{pageEndpoint}}
+
+## Preconditions
+
+1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`. If any is missing, stop and report.
+2. Vision capability: you must be able to load the page image as raw bytes and crop/inspect per-line regions. A fetcher that returns only a prose description of the image does not count.
+3. Authorization: `{{token}}` must be usable for GET against the page endpoint and PATCH against each line-text endpoint.
+4. HTTP PATCH capability (with `Content-Type: text/plain`).
+
+If any precondition fails, stop and return a concise failure report naming the missing capability.
+
+## Steps
+
+1. GET `{{pageEndpoint}}` with `Authorization: Bearer {{token}}` and `Accept: application/json` to load the AnnotationPage. Read `items[]` — each entry is a line annotation. If `items` is empty, stop — this template only revises existing lines.
+2. For each line, extract its trailing id (the last path segment of `id` / `@id`) and its `xywh=x,y,w,h` selector value (look in `target.selector.value`, falling back to any string property containing `xywh=`). Coordinates are in canvas space.
+3. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. If either is `(unknown)`, GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
+4. Fetch the page image and a per-line crop. Verify each crop visibly contains a single line of inked text.
+5. Run handwriting text recognition over each crop. Apply the recognition rules below.
+6. For each line, PATCH the text to its line-text endpoint.
+7. Report a per-line summary: how many succeeded, how many failed, and the HTTP status for any failure.
+
+## Rules
+
+- Prioritize diplomatic transcription over normalization. Preserve orthography and punctuation as observed.
+- Use explicit uncertainty markers for unclear glyphs (for example `[a?]`). Do not force certainty.
+- Do not invent expansions. If an abbreviation mark is present, transcribe the mark; do not silently expand.
+- Keep line segmentation stable — one transcription string per existing line annotation.
+- If a line's crop is illegible, send an empty body or skip the PATCH and report the line id as unresolved — do not fabricate text.
+
+## TPEN API
+
+Update one line's text via PATCH with a plain-text body:
+
+```
+PATCH {{pageEndpoint}}/line/<lineId>/text
+Authorization: Bearer {{token}}
+Content-Type: text/plain
+
+<the transcribed line text>
+```
+
+`<lineId>` is the trailing id segment of the annotation's id (the last path segment of the annotation URI).
+
+Error handling:
+
+```javascript
+if (!response.ok) {
+    throw new Error(`TPEN API ${response.status}: ${await response.text()}`)
+}
+```
+
+## Completion
+
+On success, report:
+
+- operation: `PATCH line text`
+- target: `{{pageEndpoint}}/line/<lineId>/text` per line
+- count: number of lines updated
+
+On failure, report:
+
+- the failing stage (image fetch, recognition, PATCH, etc.)
+- HTTP status and error body if applicable
+- the line id(s) affected and a recommended next step
+
+## Fallback
+
+If required resources are unreachable or you lack vision / PATCH capability, do not fabricate transcriptions and do not send partial PATCHes that overwrite real text. Report what is missing and stop.

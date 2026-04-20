@@ -52,11 +52,10 @@ function isExpired(token) {
     }
 }
 
-/** Remove `idToken` and `inviteCode` from the current URL without a navigation. */
+/** Remove `idToken` from the current URL without a navigation. */
 function stripAuthParamsFromUrl() {
     const url = new URL(location.href)
     url.searchParams.delete('idToken')
-    url.searchParams.delete('inviteCode')
     history.replaceState(null, '', url.pathname + url.search + url.hash)
 }
 
@@ -79,6 +78,11 @@ export function resolveToken() {
 
     localStorage.setItem(TOKEN_KEY, candidate)
     return candidate
+}
+
+/** Remove any stored token from `localStorage`. */
+export function clearStoredToken() {
+    localStorage.removeItem(TOKEN_KEY)
 }
 
 /**

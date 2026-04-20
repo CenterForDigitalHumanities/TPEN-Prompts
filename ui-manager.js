@@ -9,7 +9,7 @@
  */
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
-import { lineCreateEndpoint } from './tpen-service.js'
+import { lineCreateEndpoint, pageEndpoint } from './tpen-service.js'
 
 /**
  * Build a DOM element. Recognizes a few special prop keys:
@@ -35,7 +35,7 @@ const el = (tag, props = {}, children = []) => {
         }
         else node[k] = v
     }
-    for (const c of [].concat(children)) {
+    for (const c of Array.isArray(children) ? children : [children]) {
         if (c === null || c === undefined) continue
         node.append(c)
     }
@@ -89,6 +89,40 @@ export class UIManager {
     }
 
     /**
+     * Render a waiting screen with optional "Request token" / "Request context"
+     * buttons. Used when the app is iframed and has no token, or has a token
+     * but no projectID. The automatic outbound request is fired by the caller
+     * — the buttons here exist for manual retry when the first request was
+     * dropped.
+     * @param {{ message: string,
+     *           showAuthButton?: boolean,
+     *           showContextButton?: boolean,
+     *           onRequestAuth?: () => void,
+     *           onRequestContext?: () => void }} params
+     */
+    renderAwaitingParent({ message, showAuthButton = false, showContextButton = false, onRequestAuth, onRequestContext }) {
+        const children = [
+            el('div', { class: 'status info', text: message, attrs: { role: 'status', 'aria-live': 'polite' } })
+        ]
+        const buttons = []
+        if (showAuthButton && onRequestAuth) {
+            const b = el('button', { type: 'button', text: 'Allow AI To Use My TPEN Token' })
+            b.addEventListener('click', onRequestAuth)
+            buttons.push(b)
+        }
+        if (showContextButton && onRequestContext) {
+            const b = el('button', { type: 'button', text: 'Get Page Context For AI Prompts' })
+            b.addEventListener('click', onRequestContext)
+            buttons.push(b)
+        }
+        if (buttons.length) {
+            children.push(el('div', { class: 'controls' }, buttons))
+            children.push(el('p', { class: 'hint', text: 'This will allow agentic AI to work on your behalf.  This work will be attributed to your user.  You are accountable for what occurs.'}))
+        }
+        this.#replace(el('section', { class: 'card' }, children))
+    }
+
+    /**
      * Render the standalone id-entry form (shown when no `projectID` URL
      * param is present).
      * @param {{ initial?: Record<string, string>, onSubmit: (args: Record<string, string>) => void }} params
@@ -116,16 +150,15 @@ export class UIManager {
     }
 
     /**
-     * Render the main workspace: project metadata, canvas thumbnail, template
-     * picker, and generate/copy controls. Stores `context` on `this.state` so
-     * generate/copy handlers can read from it later.
+     * Render the main workspace: project metadata, template picker, and
+     * generate/copy controls. Stores `context` on `this.state` so generate/copy
+     * handlers can read from it later.
      * @param {object} context
      */
     renderWorkspace(context) {
         this.state = { ...this.state, ...context }
-        const { project, page, canvas, layer, column, line,
+        const { project, page, layer, column, line,
                 projectID, pageID, layerID, columnID, lineID } = this.state
-        const thumb = extractThumbnail(canvas)
 
         const metaRows = [
             ['Project', project?.label ?? project?.title ?? projectID]
@@ -145,13 +178,6 @@ export class UIManager {
             meta
         ])
 
-        // let preview = null
-        // if (thumb && isSafeHttpUrl(thumb)) {
-        //     const img = el('img', { alt: 'Page thumbnail' })
-        //     img.src = thumb
-        //     preview = el('figure', { class: 'canvas-preview' }, [img])
-        // }
-
         const select = el('select', { id: 'template-select' })
         for (const t of listTemplates()) {
             select.append(el('option', { value: t.id, text: t.label }))
@@ -170,13 +196,12 @@ export class UIManager {
 
         const warning = el('div', { class: 'warning', attrs: { role: 'note' } }, [
             el('strong', { text: 'Security: ' }),
-            document.createTextNode(`The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust.`)
+            el('span', { text: `The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust.` })
         ])
 
         this.#replace(el('section', { class: 'card' }, [
             header,
             warning,
-            //preview,
             el('div', { class: 'controls' }, [
                 el('label', {}, [el('span', { text: 'Prompt Options' }), select]),
                 generateBtn
@@ -203,7 +228,8 @@ export class UIManager {
                 projectID: s.projectID, pageID: s.pageID,
                 layerID: s.layerID, columnID: s.columnID, lineID: s.lineID,
                 token: s.token,
-                lineEndpoint: (s.projectID && s.pageID) ? lineCreateEndpoint(s.projectID, s.pageID) : null
+                lineEndpoint: (s.projectID && s.pageID) ? lineCreateEndpoint(s.projectID, s.pageID) : null,
+                pageEndpoint: (s.projectID && s.pageID) ? pageEndpoint(s.projectID, s.pageID) : null
             })
             this.#fullPrompt = full
             output.value = s.token ? full.replaceAll(s.token, truncateToken(s.token)) : full
@@ -275,35 +301,3 @@ function truncateToken(token) {
     return `${token.slice(0, 10)}…${token.slice(-10)}`
 }
 
-/**
- * True when `value` parses as an `http:` or `https:` URL. Guards the image
- * `src` against `javascript:`/`data:` strings from upstream payloads.
- * @param {string} value
- * @returns {boolean}
- */
-function isSafeHttpUrl(value) {
-    try {
-        const u = new URL(value, location.href)
-        return u.protocol === 'http:' || u.protocol === 'https:'
-    } catch { return false }
-}
-
-/**
- * Pick the best thumbnail URL from a IIIF canvas. Tries (in order):
- *   1. `canvas.thumbnail[0].id` / `@id`, or `canvas.thumbnail.id`
- *   2. A sized derivative from the first image body's IIIF Image service
- *   3. The raw image body id
- * @param {any} canvas
- * @returns {string|null}
- */
-function extractThumbnail(canvas) {
-    if (!canvas) return null
-    const thumb = canvas?.thumbnail?.[0]?.id ?? canvas?.thumbnail?.[0]?.['@id'] ?? canvas?.thumbnail?.id
-    if (thumb) return thumb
-    const body = canvas?.items?.[0]?.items?.[0]?.body
-    if (!body) return null
-    const bodyId = typeof body === 'string' ? body : (body.id ?? body['@id'])
-    const service = body?.service?.[0]?.id ?? body?.service?.[0]?.['@id']
-    if (service) return `${String(service).replace(/\/$/, '')}/full/!400,400/0/default.jpg`
-    return bodyId ?? null
-}

@@ -11,6 +11,11 @@
 
 import { firstLineDetectionTemplate } from './templates/detect-first-line/index.js'
 import { firstLineDetectionFastTemplate } from './templates/detect-first-line-fast/index.js'
+import { transcribeKnownLinesTemplate } from './templates/transcribe-known-lines/index.js'
+import { detectColumnsTemplate } from './templates/detect-columns/index.js'
+import { detectLinesTemplate } from './templates/detect-lines/index.js'
+import { detectColumnsAndLinesTemplate } from './templates/detect-columns-and-lines/index.js'
+import { detectAndTranscribeTemplate } from './templates/detect-and-transcribe/index.js'
 
 /**
  * @typedef {object} PromptTemplate
@@ -36,6 +41,11 @@ function register(template) {
 
 register(firstLineDetectionTemplate)
 register(firstLineDetectionFastTemplate)
+register(transcribeKnownLinesTemplate)
+register(detectColumnsTemplate)
+register(detectLinesTemplate)
+register(detectColumnsAndLinesTemplate)
+register(detectAndTranscribeTemplate)
 
 /**
  * Fetch every registered template's markdown body once and cache it. Must be

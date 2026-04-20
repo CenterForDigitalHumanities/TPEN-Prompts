@@ -16,14 +16,14 @@ const META_ENV = typeof document !== 'undefined'
     : undefined
 
 /** @type {'local'|'dev'|'prod'} */
-export const ACTIVE_ENV = (
+const ACTIVE_ENV = (
     (typeof globalThis !== 'undefined' ? globalThis.TPEN_ENV : undefined)
     ?? META_ENV
     ?? 'prod'
 )
 
 /** @type {Record<string, { servicesURL: string, TPEN3URL: string }>} */
-export const ENVIRONMENTS = {
+const ENVIRONMENTS = {
     local: {
         servicesURL: 'http://localhost:3012',
         TPEN3URL: 'http://localhost:4000'
