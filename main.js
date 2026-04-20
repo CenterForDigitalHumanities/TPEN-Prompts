@@ -12,6 +12,7 @@ import { resolveToken, persistToken } from './auth.js'
 import { fetchProject, fetchPage } from './tpen-service.js'
 import { UIManager } from './ui-manager.js'
 import { MessageHandler } from './message-handler.js'
+import { initTemplates } from './prompt-generator.js'
 
 const PARAM_KEYS = ['projectID', 'pageID', 'layerID', 'columnID', 'lineID']
 
@@ -44,6 +45,7 @@ export class PromptsApp {
      * @returns {Promise<void>}
      */
     async init() {
+        await initTemplates()
         this.token = resolveToken()
         const iframed = window.parent !== window
 
