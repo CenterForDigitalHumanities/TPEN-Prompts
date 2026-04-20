@@ -1,24 +1,17 @@
 /**
- * @file Shared `buildContext` helper for first-line-detection prompt templates.
+ * @file Shared `buildContext` helper for prompt templates.
  *
- * Both `detect-first-line` and `detect-first-line-fast` (and any future
- * variants) consume the same flat variable map — only the PROMPT.md body
- * differs. Each variant's `index.js` stays a thin wrapper that sets
- * `id`/`label`/`templateUrl` and delegates `buildContext` here.
+ * Every template consumes a superset of flat `{{name}}` variables produced by
+ * `buildTemplateContext`. Individual templates only reference the subset they
+ * need in their PROMPT.md body — unused keys simply don't render. Templates
+ * that need richer context (e.g. existing column listings) spread this result
+ * and layer their own keys on top.
  *
  * @author thehabes
  */
 
 import { getAgentIRIFromToken } from '../auth.js'
-
-/**
- * @typedef {object} FirstLineDetectionContext
- * @property {any} canvas the IIIF canvas for the page (may be a stub `{ id }` if the fetch failed).
- * @property {string} projectID
- * @property {string} pageID
- * @property {string|null} lineEndpoint POST URL for creating a line; null when pageID is missing.
- * @property {string} token JWT to include in the generated prompt's Authorization header.
- */
+import { getIRI, trailingId } from '../iiif-ids.js'
 
 /**
  * Pull the first image body URL off a IIIF canvas, or null if none is present.
@@ -26,13 +19,9 @@ import { getAgentIRIFromToken } from '../auth.js'
  * @returns {string|null}
  */
 function extractImageUrl(canvas) {
-    if (!canvas) return null
     let body = canvas?.items?.[0]?.items?.[0]?.body
-    if (!body) return null
     if (Array.isArray(body)) body = body[0]
-    if (!body) return null
-    if (typeof body === 'string') return body
-    return body.id ?? body['@id'] ?? null
+    return getIRI(body)
 }
 
 /**
@@ -48,27 +37,54 @@ function canvasDimensions(canvas) {
 }
 
 /**
- * Produce the `{{name}}` -> value map for first-line-detection PROMPT.md bodies.
- * @param {FirstLineDetectionContext} ctx
+ * Produce the `{{name}}` → value map consumed by every template's PROMPT.md.
+ * @param {object} ctx workspace context from `ui-manager.js#onGenerate`.
  * @returns {Record<string, string>}
  */
-export function buildFirstLineContext(ctx) {
-    const { canvas, projectID, pageID, lineEndpoint, token } = ctx
-    const canvasId = canvas?.id ?? canvas?.['@id'] ?? '(unknown canvas id)'
+export function buildTemplateContext(ctx) {
+    const { canvas, projectID, pageID, pageEndpoint, lineEndpoint, token } = ctx
+    const canvasId = getIRI(canvas) ?? '(unknown canvas id)'
     const imageUrl = extractImageUrl(canvas) ?? '(no image body found on canvas)'
     const { width, height } = canvasDimensions(canvas)
+    const canvasWidth = width != null ? String(width) : '(unknown)'
+    const canvasHeight = height != null ? String(height) : '(unknown)'
     const dims = (width && height) ? `${width} × ${height}` : 'unknown (use the IIIF Image API info.json)'
+    const manifestUri = getIRI(canvas?.partOf) ?? '(unknown manifest URI)'
     const userAgentURI = getAgentIRIFromToken(token) ?? '(unable to resolve agent IRI from token)'
-    const pageEndpoint = lineEndpoint ? lineEndpoint.replace(/\/line$/, '') : '(unknown page endpoint)'
     return {
-        projectID,
-        pageID,
+        projectID: projectID ?? '',
+        pageID: pageID ?? '',
         canvasId,
         imageUrl,
+        canvasWidth,
+        canvasHeight,
         dims,
+        manifestUri,
         userAgentURI,
-        pageEndpoint,
+        pageEndpoint: pageEndpoint ?? '(unknown page endpoint)',
         lineEndpoint: lineEndpoint ?? '(unknown line endpoint)',
-        token
+        token: token ?? ''
     }
+}
+
+/**
+ * Render the current column state for a given page as a markdown bullet list.
+ * Used by templates that must avoid duplicate column labels. The directly
+ * fetched `page` is authoritative when supplied, since the project graph may
+ * not hydrate `layer.pages[].columns` for every page.
+ * @param {any} project the TPEN project object.
+ * @param {string|null|undefined} pageID the short page id or full page IRI.
+ * @param {any} [fetchedPage] the page object returned by `fetchPage`, preferred when available.
+ * @returns {string}
+ */
+export function formatExistingColumns(project, pageID, fetchedPage = null) {
+    const tail = trailingId(pageID)
+    const projectPage = (project?.layers ?? [])
+        .flatMap(l => l.pages ?? [])
+        .find(pg => trailingId(pg) === tail)
+    const cols = fetchedPage?.columns ?? projectPage?.columns ?? []
+    if (!Array.isArray(cols) || cols.length === 0) {
+        return '- (No existing columns on this page — labels must be unique when created.)'
+    }
+    return cols.map(c => `- ${c.label ?? '(unlabeled)'}: ${(c.lines ?? c.annotations ?? []).length} line(s)`).join('\n')
 }
