@@ -13,7 +13,7 @@ import { buildTemplateContext } from '../inject-context.js'
 /** @type {import('../../prompt-generator.js').PromptTemplate} */
 export const firstLineDetectionFastTemplate = {
     id: 'detect-first-line-fast',
-    label: 'Detect first line (fast) → create #xywh annotation',
+    label: 'Detect First Line (fast)',
     templateUrl: new URL('./PROMPT.md', import.meta.url),
     buildContext: buildTemplateContext
 }

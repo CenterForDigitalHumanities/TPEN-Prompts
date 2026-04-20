@@ -12,7 +12,7 @@ import { buildTemplateContext, formatExistingColumns } from '../inject-context.j
 /** @type {import('../../prompt-generator.js').PromptTemplate} */
 export const detectColumnsAndLinesTemplate = {
     id: 'detect-columns-and-lines',
-    label: 'Detect columns + lines → save page',
+    label: 'Detect Main Text Columns and Individual Lines',
     templateUrl: new URL('./PROMPT.md', import.meta.url),
     buildContext: (ctx) => ({
         ...buildTemplateContext(ctx),

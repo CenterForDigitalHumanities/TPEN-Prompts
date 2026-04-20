@@ -12,7 +12,7 @@ import { buildTemplateContext } from '../inject-context.js'
 /** @type {import('../../prompt-generator.js').PromptTemplate} */
 export const detectLinesTemplate = {
     id: 'detect-lines',
-    label: 'Detect lines → PUT page',
+    label: 'Detect Individual Lines (No Column Grouping)',
     templateUrl: new URL('./PROMPT.md', import.meta.url),
     buildContext: buildTemplateContext
 }
