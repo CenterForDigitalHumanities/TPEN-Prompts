@@ -67,6 +67,8 @@ export class UIManager {
     #generateBtn = null
     /** Hint shown alongside Generate when disabled; removed once a token is held. */
     #generateHint = null
+    /** Pending timer for clearing the Copy feedback message. */
+    #feedbackTimer = null
 
     /**
      * @param {string} [rootId='app'] id of the element to render into.
@@ -250,7 +252,10 @@ export class UIManager {
      */
     updateToken(token) {
         this.state.token = token ?? null
-        if (!token) return
+        if (!token) {
+            if (this.#generateBtn) this.#generateBtn.disabled = true
+            return
+        }
         if (this.#authButton) {
             this.#authButton.remove()
             this.#authButton = null
@@ -340,7 +345,11 @@ export class UIManager {
                 output.value = previous
             }
         }
-        setTimeout(() => { feedback.textContent = '' }, 2000)
+        if (this.#feedbackTimer) clearTimeout(this.#feedbackTimer)
+        this.#feedbackTimer = setTimeout(() => {
+            feedback.textContent = ''
+            this.#feedbackTimer = null
+        }, 2000)
     }
 }
 

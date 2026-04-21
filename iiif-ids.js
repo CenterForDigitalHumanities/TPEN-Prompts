@@ -26,5 +26,7 @@ export function getIRI(value) {
  */
 export function trailingId(value) {
     const iri = getIRI(value)
-    return iri ? String(iri).split('/').pop() : null
+    if (!iri) return null
+    const parts = String(iri).split('/').filter(Boolean)
+    return parts.pop() ?? null
 }

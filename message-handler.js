@@ -49,8 +49,7 @@ export class MessageHandler {
                 this.app.acceptAuth({ token: data.idToken ?? null })
                 break
             case 'TPEN_CONTEXT':
-                Promise.resolve(this.app.acceptContext(data))
-                    .catch(err => console.error('acceptContext failed', err))
+                this.app.acceptContext(data).catch(err => console.error('acceptContext failed', err))
                 break
             case 'UPDATE_CURRENT_LINE':
                 this.app.updateCurrentLine(data.currentLineId ?? null)

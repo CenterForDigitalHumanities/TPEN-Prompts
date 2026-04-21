@@ -84,13 +84,11 @@ export class PromptsApp {
      * @param {{ token: string|null }} payload
      */
     acceptAuth({ token }) {
-        const stored = persistToken(token)
-        if (stored) this.token = stored
+        this.token = persistToken(token)
+        this.ui.updateToken(this.token)
         if (!this.token) {
             this.ui.setStatus('Parent sent no valid token; reload the parent to re-authenticate.', 'error')
-            return
         }
-        this.ui.updateToken(this.token)
     }
 
     /**
@@ -129,10 +127,11 @@ export class PromptsApp {
             canvas = await resolveCanvasForPage(page)
         }
         // Fall back to the project manifest when the canvas lacks partOf, so
-        // templates can still render a manifest URI.
+        // templates can still render a manifest URI. Clone before mutating —
+        // the parent frame retains a reference to the original payload.
         if (canvas && !canvas.partOf) {
             const projectManifest = Array.isArray(project?.manifest) ? project.manifest[0] : project?.manifest
-            if (projectManifest) canvas.partOf = projectManifest
+            if (projectManifest) canvas = { ...canvas, partOf: projectManifest }
         }
 
         const lineID = payload.currentLineId ? (trailingId(payload.currentLineId) ?? '') : ''
