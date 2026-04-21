@@ -47,6 +47,13 @@ h1 {
     margin-bottom: 1rem;
 }
 
+.workspace-header hr {
+    inline-size: 100%;
+    margin-block: 0;
+    border: 0;
+    border-block-start: 1px solid var(--border);
+}
+
 .meta {
     display: grid;
     grid-template-columns: max-content 1fr;
@@ -151,4 +158,8 @@ textarea:focus-visible {
 .feedback {
     font-size: 0.85rem;
     color: var(--muted);
+}
+
+.tool-header {
+    text-align: center;
 }

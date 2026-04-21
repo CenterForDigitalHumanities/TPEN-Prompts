@@ -188,7 +188,8 @@ export class UIManager {
 
         this.#authButton = null
         const headerChildren = [
-            el('h1', { text: 'TPEN AI Prompt Builder' }),
+            el('h1', { text: 'TPEN AI Prompt Builder', class: 'tool-header' }),
+            el('hr'),
             meta,
             warning
         ]
