@@ -19,18 +19,25 @@ Each entry is `<lineId>: <xywh selector>` in canvas coordinates.
 
 ## Preconditions
 
-1. Required context present: `projectID`, `pageID`, `canvasId`, `token`, and at least one existing line. `lineCount` = `{{lineCount}}`; if `0`, stop — this template only revises existing lines.
-2. Vision capability: you must be able to load the page image as raw bytes and crop/inspect per-line regions. A fetcher that returns only a prose description of the image does not count.
-3. Authorization: the token shown in the PATCH example below must be usable for PATCH against each line-text endpoint.
-4. HTTP PATCH capability (with `Content-Type: text/plain`).
+All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions, existing-line list) are provided above. This template only revises existing lines: `lineCount` = `{{lineCount}}`. If `lineCount` is `0`, stop immediately and report.
+
+You must have:
+
+1. Vision capability: load the page image as raw bytes and crop/inspect per-line regions. A fetcher that returns only a prose description of the image does not count.
+2. HTTP PATCH capability (with `Content-Type: text/plain`).
 
 If any precondition fails, stop and return a concise failure report naming the missing capability.
 
 ## Steps
 
-1. Fetch the page image and a per-line crop using each line's `xywh` from the list above. Verify each crop visibly contains a single line of inked text.
+1. Fetch the page image. Read its actual pixel dimensions (`img_w`, `img_h`) — the IIIF server may return a scaled rendering, not the canvas-native resolution. The `xywh` selectors above are in canvas space; convert each to image-pixel space before cropping using:
+   - `pixel_x = round(canvas_x * img_w / {{canvasWidth}})`
+   - `pixel_y = round(canvas_y * img_h / {{canvasHeight}})`
+   - `pixel_w = round(canvas_w * img_w / {{canvasWidth}})`
+   - `pixel_h = round(canvas_h * img_h / {{canvasHeight}})`
+   Crop each line region and verify it visibly contains a single line of inked text.
 2. Run handwriting text recognition over each crop. Apply the recognition rules below.
-3. For each line, PATCH the text to its line-text endpoint.
+3. For each line, PATCH the text to its line-text endpoint — one PATCH per line in the "Existing lines" list.
 4. Report a per-line summary: how many succeeded, how many failed, and the HTTP status for any failure.
 
 ## Rules

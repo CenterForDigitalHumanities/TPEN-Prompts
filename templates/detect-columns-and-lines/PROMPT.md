@@ -17,18 +17,23 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Preconditions
 
-1. Required context present: `projectID`, `pageID`, `canvasId`, `token`. If any is missing, stop and report.
-2. Vision capability: you must be able to load the page image as raw bytes and measure pixel coordinates on it.
-3. Authorization: the token shown in the PUT example below must be usable for both POST (column) and PUT (page) against the page endpoints.
-4. HTTP POST and PUT capability with `Content-Type: application/json`.
+All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
+
+1. Vision capability: load the page image as raw bytes and measure pixel coordinates on it.
+2. HTTP POST and PUT capability with `Content-Type: application/json`.
 
 If any precondition fails, stop and return a concise failure report.
 
 ## Steps
 
-1. Resolve canvas dimensions. {{canvasDimsResolution}}
-2. Fetch the page image. Detect main text column regions in reading order first, then detect the lines inside each column (reading order preserved within each column). If the page visibly has a single text block, create one column containing every detected line — do not subdivide.
-3. For every line, measure a bounding box and convert to integer canvas coordinates. Clamp to the canvas and round. Track each line's column index (an integer, 0-based) as you detect it.
+1. Fetch the page image. Read its actual pixel dimensions (`img_w`, `img_h`) — the IIIF server may return a scaled rendering, not the canvas-native resolution.
+2. Detect main text column regions in reading order first, then detect the lines inside each column (reading order preserved within each column). If the page visibly has a single text block, create one column containing every detected line — do not subdivide. Track each line's column index (an integer, 0-based) as you detect it.
+3. For every line, measure a bounding box in image-pixel space and convert to integer canvas coordinates using:
+   - `canvas_x = round(pixel_x * {{canvasWidth}} / img_w)`
+   - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
+   - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
+   - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
+   Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. PUT every detected line to the page endpoint in a single request (see TPEN API below). The response returns line ids in the same order as the submitted `items` — use positional mapping to recover ids per column index.
 5. For each column, POST `{ label, annotations }` where `annotations` is the server-assigned line ids that belong to that column index. Labels must be unique and must not clash with anything in "Existing columns on this page".
 6. Report counts: lines saved, columns created, and any failures.
@@ -39,12 +44,12 @@ If any precondition fails, stop and return a concise failure report.
 - Column labels are page-scoped and must be unique. Do not duplicate an existing column label.
 - Each line annotation belongs to at most one column.
 - Preserve reading order across columns and within each column.
-- Prefer high recall: include borderline columns/lines and flag them, rather than silently dropping them.
+- Prefer high recall: include borderline columns/lines rather than silently dropping them.
 - Keep line boxes tight enough for line-level recognition but generous enough not to clip ascenders/descenders.
 
 ## TPEN API
 
-Save all lines via a single PUT:
+Save all lines via a single PUT. The `items` array must contain one annotation per detected line; replace `x,y,w,h` with the integer canvas coordinates computed in step 3.
 
 ```
 PUT {{pageEndpoint}}

@@ -13,18 +13,23 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Preconditions
 
-1. Required context present: `projectID`, `pageID`, `canvasId`, `token`. If any is missing, stop and report.
-2. Vision capability: you must be able to load the page image as raw bytes and measure pixel coordinates on it.
-3. Authorization: the token shown in the PUT example below must be usable for PUT against the page endpoint.
-4. HTTP PUT capability with `Content-Type: application/json`.
+All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
+
+1. Vision capability: load the page image as raw bytes and measure pixel coordinates on it.
+2. HTTP PUT capability with `Content-Type: application/json`.
 
 If any precondition fails, stop and return a concise failure report.
 
 ## Steps
 
-1. Resolve canvas dimensions. {{canvasDimsResolution}}
-2. Fetch the page image and detect every text line in reading order.
-3. For each detected line, measure a bounding box and convert to integer canvas coordinates. Clamp to the canvas and round.
+1. Fetch the page image. Read its actual pixel dimensions (`img_w`, `img_h`) — the IIIF server may return a scaled rendering, not the canvas-native resolution.
+2. Detect every text line in reading order and measure each line's bounding box in image-pixel space.
+3. Convert every bounding box to integer canvas coordinates using:
+   - `canvas_x = round(pixel_x * {{canvasWidth}} / img_w)`
+   - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
+   - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
+   - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
+   Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. PUT every detected line to the page endpoint in a single request (see TPEN API below). Leave `body` empty — no text yet.
 5. Report count and any failure cause.
 
@@ -33,11 +38,11 @@ If any precondition fails, stop and return a concise failure report.
 - Bounds MUST be saved as integer coordinates in canvas space. No percent, no `pixel:` prefix on the selector value.
 - Preserve reading order across the whole page.
 - Keep each line box tight enough for line-level recognition — do not merge adjacent lines — but generous enough not to clip ascenders/descenders.
-- Prefer high recall: include borderline lines and flag them, rather than silently dropping them.
+- Prefer high recall: include borderline lines rather than silently dropping them.
 
 ## TPEN API
 
-Save all detected lines via a single PUT:
+Save all detected lines via a single PUT. The `items` array must contain one annotation per detected line; replace `x,y,w,h` with the integer canvas coordinates computed in step 3.
 
 ```
 PUT {{pageEndpoint}}
