@@ -12,7 +12,7 @@ import { buildTemplateContext, formatExistingColumns, formatExistingLines } from
 /** @type {import('../../prompt-generator.js').PromptTemplate} */
 export const detectColumnsTemplate = {
     id: 'detect-columns',
-    label: 'Detect Main Text Columns',
+    label: 'Group Lines Into Columns',
     templateUrl: new URL('./PROMPT.md', import.meta.url),
     buildContext: (ctx) => ({
         ...buildTemplateContext(ctx),
