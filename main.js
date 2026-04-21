@@ -110,14 +110,32 @@ export class PromptsApp {
             return
         }
 
+        const hasSelector = item => {
+            const t = item?.target
+            if (typeof t === 'string') return t.includes('#xywh=')
+            const sel = t?.selector
+            const val = Array.isArray(sel) ? sel[0]?.value : sel?.value
+            return typeof val === 'string' && val.includes('xywh=')
+        }
+
+        const isPageHydrated = p =>
+            Array.isArray(p?.items) &&
+            (p.items.length === 0 || hasSelector(p.items[0]))
+
+        const isProjectHydrated = p =>
+            Array.isArray(p?.layers) &&
+            (p.layers.length === 0 || Array.isArray(p.layers[0]?.pages))
+
         // Upgrade a stub project (no layers) when we have a token.
-        if (!project.layers && this.token) {
+        if (this.token && !isProjectHydrated(project)) {
+            console.warn('[tpen-prompts] refetching project — parent sent unhydrated payload')
             try { project = await fetchProject(projectID, this.token) } catch (err) { console.warn('fetchProject failed', err) }
         }
 
         const pageID = page ? (trailingId(page) ?? '') : ''
-        // Upgrade a stub page (no items) when we have a token and a pageID.
-        if (page && !Array.isArray(page.items) && this.token && pageID) {
+        // Upgrade a stub page (unhydrated items) when we have a token and a pageID.
+        if (this.token && pageID && !isPageHydrated(page)) {
+            console.warn('[tpen-prompts] refetching page — parent sent unhydrated payload')
             try { page = await fetchPageResolved(projectID, pageID, this.token) ?? page } catch (err) { console.warn('fetchPageResolved failed', err) }
         }
 
