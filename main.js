@@ -160,7 +160,17 @@ export class PromptsApp {
      *           imageUrl?: string|null, manifestUri?: string|null, columns?: Array }} payload
      */
     async #applyContextFromPayload(payload) {
-        const project = { id: payload.projectID, label: payload.projectLabel ?? payload.projectID }
+        // Start from a stub so renderWorkspace can run even if the project
+        // fetch fails; upgrade to the full record when available since it
+        // carries the manifest URI that TPEN_CONTEXT sometimes omits.
+        let project = { id: payload.projectID, label: payload.projectLabel ?? payload.projectID }
+        if (this.token) {
+            try {
+                project = await fetchProject(payload.projectID, this.token)
+            } catch (err) {
+                console.warn('fetchProject failed; using stub', err)
+            }
+        }
         let page = null
         if (payload.pageID) {
             if (this.token) {
@@ -172,7 +182,7 @@ export class PromptsApp {
             }
             page ??= { id: payload.pageID, label: payload.pageLabel ?? null, columns: payload.columns ?? [] }
         }
-        const canvas = payload.canvasId ? {
+        let canvas = payload.canvasId ? {
             id: payload.canvasId,
             width: payload.canvasWidth ?? null,
             height: payload.canvasHeight ?? null,
@@ -181,6 +191,31 @@ export class PromptsApp {
                 ? [{ items: [{ body: { id: payload.imageUrl } }] }]
                 : []
         } : null
+        // Payload may arrive before the parent has loaded its canvas. When canvas
+        // fields are missing — or present but incomplete (no dimensions / image /
+        // manifest) — resolve from the page target directly so templates get the
+        // full canvas record.
+        const needsCanvasFetch = page && (
+            !canvas
+            || canvas.width == null
+            || canvas.height == null
+            || !canvas.partOf
+            || (Array.isArray(canvas.items) && canvas.items.length === 0)
+        )
+        if (needsCanvasFetch) {
+            const resolved = await resolveCanvasForPage(page)
+            // resolveCanvasForPage falls back to { id } on fetch failure; only
+            // promote it when it actually carries canvas fields we need.
+            if (resolved && (resolved.items || resolved.width || resolved.partOf)) {
+                canvas = resolved
+            }
+        }
+        // Canvases don't always declare partOf; the project record does carry
+        // a manifest URI, so fall back to it when the canvas has none.
+        if (canvas && !canvas.partOf) {
+            const projectManifest = Array.isArray(project?.manifest) ? project.manifest[0] : project?.manifest
+            if (projectManifest) canvas.partOf = projectManifest
+        }
 
         this.ui.renderWorkspace({
             projectID: payload.projectID,
