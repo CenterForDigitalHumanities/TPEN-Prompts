@@ -57,17 +57,6 @@ h1 {
 .meta dt { color: var(--muted); }
 .meta dd { margin: 0; word-break: break-all; }
 
-.canvas-preview {
-    margin: 0 0 1rem;
-    text-align: center;
-}
-.canvas-preview img {
-    max-width: 100%;
-    max-height: 280px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-}
-
 .form {
     display: flex;
     flex-direction: column;

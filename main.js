@@ -233,7 +233,11 @@ async function resolveCanvasForPage(page) {
     const target = page?.target
     if (!target) return null
     if (typeof target === 'object' && (target.items || target.width)) return target
-    const canvasId = getIRI(target)
+    // W3C Web Annotation targets carry the canvas IRI on `source`; fall back to
+    // `id`/`@id` for plain IIIF references.
+    const canvasId = (typeof target === 'object' && target?.source)
+        ? (typeof target.source === 'string' ? target.source : getIRI(target.source))
+        : getIRI(target)
     if (!canvasId) return null
     if (!isSafeHttpUrl(canvasId)) {
         console.warn('Canvas id rejected (non-http(s))', canvasId)

@@ -253,6 +253,13 @@ export class UIManager {
     updateToken(token) {
         this.state.token = token ?? null
         if (!token) {
+            // If the workspace is already on screen without a consent button,
+            // re-render so the user has a visible path back to authorizing —
+            // otherwise they're stranded with a disabled Generate button.
+            if (this.#generateBtn && !this.#authButton) {
+                this.renderWorkspace(this.state)
+                return
+            }
             if (this.#generateBtn) this.#generateBtn.disabled = true
             return
         }
