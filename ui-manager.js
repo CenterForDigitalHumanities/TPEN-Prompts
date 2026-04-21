@@ -9,7 +9,7 @@
  */
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
-import { lineCreateEndpoint, pageEndpoint } from './tpen-service.js'
+import { pageEndpoint, projectEndpoint } from './tpen-service.js'
 import { trailingId } from './iiif-ids.js'
 
 /**
@@ -216,7 +216,7 @@ export class UIManager {
         })
         this.#generateBtn = generateBtn
         const output = el('textarea', {
-            id: 'output', readOnly: true, rows: 20, spellcheck: false,
+            id: 'output', readOnly: true, rows: 20, spellcheck: false, autocomplete: 'off',
             placeholder: 'Click “Generate prompt” to compose.'
         })
         const copyBtn = el('button', { type: 'button', id: 'copy-btn', text: 'Copy', disabled: true })
@@ -308,7 +308,7 @@ export class UIManager {
                 projectID: s.projectID, pageID: s.pageID,
                 layerID: s.layerID, columnID: s.columnID, lineID: s.lineID,
                 token: s.token,
-                lineEndpoint: (s.projectID && s.pageID) ? lineCreateEndpoint(s.projectID, s.pageID) : null,
+                projectEndpoint: s.projectID ? projectEndpoint(s.projectID) : null,
                 pageEndpoint: (s.projectID && s.pageID) ? pageEndpoint(s.projectID, s.pageID) : null
             })
             this.#fullPrompt = full

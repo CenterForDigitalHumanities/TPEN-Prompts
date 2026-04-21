@@ -42,14 +42,15 @@ function canvasDimensions(canvas) {
  * @returns {Record<string, string>}
  */
 export function buildTemplateContext(ctx) {
-    const { canvas, projectID, pageID, pageEndpoint, lineEndpoint, token } = ctx
+    const { canvas, project, projectID, pageID, projectEndpoint, pageEndpoint, token } = ctx
     const canvasId = getIRI(canvas) ?? '(unknown canvas id)'
     const imageUrl = extractImageUrl(canvas) ?? '(no image body found on canvas)'
     const { width, height } = canvasDimensions(canvas)
     const canvasWidth = width != null ? String(width) : '(unknown)'
     const canvasHeight = height != null ? String(height) : '(unknown)'
     const dims = (width && height) ? `${width} × ${height}` : 'unknown (use the IIIF Image API info.json)'
-    const manifestUri = getIRI(canvas?.partOf) ?? '(unknown manifest URI)'
+    const projectManifest = Array.isArray(project?.manifest) ? project.manifest[0] : project?.manifest
+    const manifestUri = getIRI(canvas?.partOf) ?? getIRI(projectManifest) ?? '(unknown manifest URI)'
     const userAgentURI = getAgentIRIFromToken(token) ?? '(unable to resolve agent IRI from token)'
     return {
         projectID: projectID ?? '',
@@ -61,8 +62,8 @@ export function buildTemplateContext(ctx) {
         dims,
         manifestUri,
         userAgentURI,
+        projectEndpoint: projectEndpoint ?? '(unknown project endpoint)',
         pageEndpoint: pageEndpoint ?? '(unknown page endpoint)',
-        lineEndpoint: lineEndpoint ?? '(unknown line endpoint)',
         token: token ?? ''
     }
 }

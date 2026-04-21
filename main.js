@@ -126,13 +126,6 @@ export class PromptsApp {
         if (!canvas && page) {
             canvas = await resolveCanvasForPage(page)
         }
-        // Fall back to the project manifest when the canvas lacks partOf, so
-        // templates can still render a manifest URI. Clone before mutating —
-        // the parent frame retains a reference to the original payload.
-        if (canvas && !canvas.partOf) {
-            const projectManifest = Array.isArray(project?.manifest) ? project.manifest[0] : project?.manifest
-            if (projectManifest) canvas = { ...canvas, partOf: projectManifest }
-        }
 
         const lineID = payload.currentLineId ? (trailingId(payload.currentLineId) ?? '') : ''
 

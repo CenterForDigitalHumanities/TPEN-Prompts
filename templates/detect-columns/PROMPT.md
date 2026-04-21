@@ -75,7 +75,7 @@ if (!response.ok) {
 }
 ```
 
-Column verification (best-effort): if you need to re-read current columns mid-task, GET the Project object and locate the page inside `project.layers[*].pages[*]` — inspect `page.columns`. Do not block column creation on a failed Project read; continue with the POSTs and flag verification as unavailable.
+Column verification (best-effort): if you need to re-read current columns mid-task, GET `{{projectEndpoint}}` with `Authorization: Bearer {{token}}` and locate the page inside `project.layers[*].pages[*]` — inspect `page.columns`. Do not block column creation on a failed Project read; continue with the POSTs and flag verification as unavailable.
 
 ## Completion
 

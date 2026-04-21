@@ -9,8 +9,6 @@
  * @author thehabes
  */
 
-import { firstLineDetectionTemplate } from './templates/detect-first-line/index.js'
-import { firstLineDetectionFastTemplate } from './templates/detect-first-line-fast/index.js'
 import { transcribeKnownLinesTemplate } from './templates/transcribe-known-lines/index.js'
 import { detectColumnsTemplate } from './templates/detect-columns/index.js'
 import { detectLinesTemplate } from './templates/detect-lines/index.js'
@@ -39,8 +37,6 @@ function register(template) {
     REGISTRY.set(template.id, template)
 }
 
-register(firstLineDetectionTemplate)
-register(firstLineDetectionFastTemplate)
 register(transcribeKnownLinesTemplate)
 register(detectColumnsTemplate)
 register(detectLinesTemplate)

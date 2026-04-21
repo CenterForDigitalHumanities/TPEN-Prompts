@@ -58,6 +58,16 @@ export function fetchPageResolved(projectID, pageID, token) {
 }
 
 /**
+ * Build the project endpoint URL (project/index.js). Templates use this for
+ * best-effort GETs that verify project-level state mid-task.
+ * @param {string} projectID
+ * @returns {string} absolute URL.
+ */
+export function projectEndpoint(projectID) {
+    return `${CONFIG.servicesURL}/project/${encodeURIComponent(projectID)}`
+}
+
+/**
  * Build the page endpoint URL (page/index.js). Templates use this for PUT/PATCH
  * operations that target the page or its sub-resources (lines, columns).
  * @param {string} projectID
@@ -66,16 +76,4 @@ export function fetchPageResolved(projectID, pageID, token) {
  */
 export function pageEndpoint(projectID, pageID) {
     return `${CONFIG.servicesURL}/project/${encodeURIComponent(projectID)}/page/${encodeURIComponent(pageID)}`
-}
-
-/**
- * Build the POST URL that creates a line on a page (line/index.js:50).
- * Templates bake this into generated prompts so an agentic LLM knows where
- * to send the annotation it produces.
- * @param {string} projectID
- * @param {string} pageID
- * @returns {string} absolute URL.
- */
-export function lineCreateEndpoint(projectID, pageID) {
-    return `${pageEndpoint(projectID, pageID)}/line`
 }
