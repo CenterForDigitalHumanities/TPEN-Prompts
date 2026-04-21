@@ -65,8 +65,8 @@ export class UIManager {
     #lineMetaValue = null
     /** Generate button; disabled until a token is held (prompts bake the token in). */
     #generateBtn = null
-    /** Hint shown alongside Generate when disabled; removed once a token is held. */
-    #generateHint = null
+    /** Everything outside the header — hidden until a good token is held. */
+    #workspaceBody = null
     /** Pending timer for clearing the Copy feedback message. */
     #feedbackTimer = null
 
@@ -181,10 +181,16 @@ export class UIManager {
             if (k === 'Line') this.#lineMetaValue = dd
         }
 
+        const warning = el('div', { class: 'warning', attrs: { role: 'note' } }, [
+            el('strong', { text: 'Security: ' }),
+            el('span', { text: `The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust.` })
+        ])
+
         this.#authButton = null
         const headerChildren = [
             el('h1', { text: 'TPEN AI Prompt Builder' }),
-            meta
+            meta,
+            warning
         ]
         if (!token && onRequestAuth) {
             const b = el('button', { type: 'button', class: 'auth-btn', text: 'Allow AI To Use My TPEN Token' })
@@ -208,9 +214,6 @@ export class UIManager {
             disabled: !token
         })
         this.#generateBtn = generateBtn
-        this.#generateHint = !token
-            ? el('span', { class: 'hint', text: 'Click "Allow AI To Use My TPEN Token" above to enable prompt generation.' })
-            : null
         const output = el('textarea', {
             id: 'output', readOnly: true, rows: 20, spellcheck: false,
             placeholder: 'Click “Generate prompt” to compose.'
@@ -221,25 +224,20 @@ export class UIManager {
         generateBtn.addEventListener('click', () => this.#onGenerate(select, output, copyBtn))
         copyBtn.addEventListener('click', () => this.#onCopy(output, feedback))
 
-        const warning = el('div', { class: 'warning', attrs: { role: 'note' } }, [
-            el('strong', { text: 'Security: ' }),
-            el('span', { text: `The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust.` })
-        ])
-
         const generateControls = [
             el('label', {}, [el('span', { text: 'Prompt Options' }), select]),
             generateBtn
         ]
-        if (this.#generateHint) generateControls.push(this.#generateHint)
 
-        this.#replace(el('section', { class: 'card' }, [
-            header,
-            warning,
+        const body = el('div', { class: 'workspace-body', hidden: !token }, [
             el('div', { class: 'controls' }, generateControls),
             el('label', { class: 'output-label', htmlFor: 'output', text: 'Generated prompt' }),
             output,
             el('div', { class: 'controls' }, [copyBtn, feedback])
-        ]))
+        ])
+        this.#workspaceBody = body
+
+        this.#replace(el('section', { class: 'card' }, [header, body]))
     }
 
     /**
@@ -255,12 +253,13 @@ export class UIManager {
         if (!token) {
             // If the workspace is already on screen without a consent button,
             // re-render so the user has a visible path back to authorizing —
-            // otherwise they're stranded with a disabled Generate button.
+            // otherwise they're stranded with the body hidden and no way back.
             if (this.#generateBtn && !this.#authButton) {
                 this.renderWorkspace(this.state)
                 return
             }
             if (this.#generateBtn) this.#generateBtn.disabled = true
+            if (this.#workspaceBody) this.#workspaceBody.hidden = true
             return
         }
         if (this.#authButton) {
@@ -268,10 +267,7 @@ export class UIManager {
             this.#authButton = null
         }
         if (this.#generateBtn) this.#generateBtn.disabled = false
-        if (this.#generateHint) {
-            this.#generateHint.remove()
-            this.#generateHint = null
-        }
+        if (this.#workspaceBody) this.#workspaceBody.hidden = false
     }
 
     /**
