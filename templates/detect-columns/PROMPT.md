@@ -9,8 +9,6 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 - Canvas: {{canvasId}}
 - Canvas Dimensions: {{canvasWidth}} × {{canvasHeight}}
 - Image: {{imageUrl}}
-- Manifest: {{manifestUri}}
-- User Agent URI: {{userAgentURI}}
 - Page endpoint: {{pageEndpoint}}
 
 ## Existing columns on this page
@@ -25,21 +23,20 @@ Each entry is `<lineId>: <xywh selector>` in canvas coordinates. Use these ids v
 
 ## Preconditions
 
-1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`, and a non-empty existing-lines list above. If any is missing, stop and report.
+1. Required context present: `projectID`, `pageID`, `canvasId`, `token`, and at least one existing line. `lineCount` = `{{lineCount}}`; if this is `0`, stop immediately — this template operates on an existing line set.
 2. Vision capability: you must be able to load the page image as raw bytes and measure pixel coordinates on it.
-3. Authorization: `{{token}}` must be usable for POST against the page's column endpoint.
+3. Authorization: the token shown in the POST example below must be usable for POST against the page's column endpoint.
 4. HTTP POST capability with `Content-Type: application/json`.
 
 If any precondition fails, stop and return a concise failure report.
 
 ## Steps
 
-1. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. Otherwise GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
-2. Analyze the page image and detect column regions in reading order.
-3. For each detected column, determine which of the existing line ids (from the list above) fall within its bounds using each line's `xywh`. A line is assigned to exactly one column.
-4. Choose a unique label per column (e.g., `Column A`, `Column B`). The label must not clash with any label listed under "Existing columns on this page".
-5. POST one column at a time via the column endpoint, with `{ label, annotations }` where `annotations` is the array of line ids assigned to that column.
-6. Report the count of created columns and any per-column failures.
+1. Resolve canvas dimensions. {{canvasDimsResolution}}
+2. Fetch the page image and detect main text column regions in reading order. If the page visibly has a single text block, create one column containing every existing line id — do not subdivide.
+3. For each detected column, determine which of the existing line ids (from the list above) belong to it. Assign a line to the column that contains the center point of its `xywh`. Each line belongs to exactly one column.
+4. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any label under "Existing columns on this page", then POST `{ label, annotations }` to the column endpoint. `annotations` is the array of line ids assigned to that column.
+5. Report the count of created columns and any per-column failures.
 
 ## Rules
 
@@ -67,15 +64,7 @@ Content-Type: application/json
 
 Each `<line-id>` is the trailing id segment of a line annotation listed above.
 
-Error handling:
-
-```javascript
-if (!response.ok) {
-    throw new Error(`TPEN API ${response.status}: ${await response.text()}`)
-}
-```
-
-Column verification (best-effort): if you need to re-read current columns mid-task, GET `{{projectEndpoint}}` with `Authorization: Bearer {{token}}` and locate the page inside `project.layers[*].pages[*]` — inspect `page.columns`. Do not block column creation on a failed Project read; continue with the POSTs and flag verification as unavailable.
+On any non-2xx response, stop the column in progress and include the HTTP status and response body in the failure report.
 
 ## Completion
 
@@ -91,7 +80,3 @@ On failure, report:
 - the failing stage (image fetch, detection, POST)
 - HTTP status and error body for any failed POST
 - recommended next step (e.g., choose a different label, reassign lines)
-
-## Fallback
-
-If required resources are unreachable or you lack vision / POST capability, do not fabricate column geometry and do not send partial POSTs that misassign lines. Report what is missing and stop.

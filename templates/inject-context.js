@@ -42,7 +42,7 @@ function canvasDimensions(canvas) {
  * @returns {Record<string, string>}
  */
 export function buildTemplateContext(ctx) {
-    const { canvas, project, projectID, pageID, projectEndpoint, pageEndpoint, token } = ctx
+    const { canvas, project, page, projectID, pageID, projectEndpoint, pageEndpoint, token } = ctx
     const canvasId = getIRI(canvas) ?? '(unknown canvas id)'
     const imageUrl = extractImageUrl(canvas) ?? '(no image body found on canvas)'
     const { width, height } = canvasDimensions(canvas)
@@ -52,6 +52,10 @@ export function buildTemplateContext(ctx) {
     const projectManifest = Array.isArray(project?.manifest) ? project.manifest[0] : project?.manifest
     const manifestUri = getIRI(canvas?.partOf) ?? getIRI(projectManifest) ?? '(unknown manifest URI)'
     const userAgentURI = getAgentIRIFromToken(token) ?? '(unable to resolve agent IRI from token)'
+    const canvasDimsResolution = (width && height)
+        ? `Canvas dimensions are already resolved as ${width} × ${height} — use these values directly; no fetch required.`
+        : `Canvas dimensions unknown. GET \`${canvasId}\` and read \`width\`/\`height\`. If that fails, GET \`${manifestUri}\` and find the matching canvas in \`items\` by id.`
+    const lineCount = Array.isArray(page?.items) ? page.items.length : 0
     return {
         projectID: projectID ?? '',
         pageID: pageID ?? '',
@@ -60,8 +64,10 @@ export function buildTemplateContext(ctx) {
         canvasWidth,
         canvasHeight,
         dims,
+        canvasDimsResolution,
         manifestUri,
         userAgentURI,
+        lineCount: String(lineCount),
         projectEndpoint: projectEndpoint ?? '(unknown project endpoint)',
         pageEndpoint: pageEndpoint ?? '(unknown page endpoint)',
         token: token ?? ''
