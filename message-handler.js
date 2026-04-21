@@ -1,17 +1,16 @@
 /**
  * @file postMessage consumer for the transcription parent frame.
  *
- * The parent never auto-pushes to this tool. The user clicks the
- * "Request token" / "Request context" buttons, which send
- * `REQUEST_TPEN_ID_TOKEN` / `REQUEST_TPEN_CONTEXT` upstream. The parent
- * replies with `TPEN_ID_TOKEN` / `TPEN_CONTEXT`; those replies are the
- * only inbound types this handler acts on.
+ * The parent pushes `TPEN_CONTEXT` unprompted on iframe load, carrying the
+ * hydrated `project`, `page`, and `canvas` objects. Line navigation arrives
+ * as `UPDATE_CURRENT_LINE` deltas. The token is separate and user-gated:
+ * clicking the consent button sends `REQUEST_TPEN_ID_TOKEN` upstream, and
+ * the parent replies with `TPEN_ID_TOKEN`.
  *
  * @author thehabes
  */
 
 import { CONFIG } from './config.js'
-import { trailingId } from './iiif-ids.js'
 
 // Accept messages only from known TPEN3 origins and the current origin (for
 // same-origin dev harnesses). Anything else could inject auth tokens or drive
@@ -47,23 +46,14 @@ export class MessageHandler {
         if (!data?.type) return
         switch (data.type) {
             case 'TPEN_ID_TOKEN':
-                Promise.resolve(this.app.acceptAuth({
-                    token: data.idToken ?? null
-                })).catch(err => console.error('acceptAuth failed', err))
+                this.app.acceptAuth({ token: data.idToken ?? null })
                 break
             case 'TPEN_CONTEXT':
-                Promise.resolve(this.app.acceptContext({
-                    projectID: data.projectId ?? null,
-                    projectLabel: data.projectLabel ?? null,
-                    pageID: data.pageId ? trailingId(data.pageId) : null,
-                    pageLabel: data.pageLabel ?? null,
-                    canvasId: data.canvasId ?? null,
-                    canvasWidth: data.canvasWidth ?? null,
-                    canvasHeight: data.canvasHeight ?? null,
-                    imageUrl: data.imageUrl ?? null,
-                    manifestUri: data.manifestUri ?? null,
-                    columns: Array.isArray(data.columns) ? data.columns : []
-                })).catch(err => console.error('acceptContext failed', err))
+                Promise.resolve(this.app.acceptContext(data))
+                    .catch(err => console.error('acceptContext failed', err))
+                break
+            case 'UPDATE_CURRENT_LINE':
+                this.app.updateCurrentLine(data.currentLineId ?? null)
                 break
             default:
                 break
@@ -87,7 +77,4 @@ export class MessageHandler {
 
     /** Ask the parent frame to send `TPEN_ID_TOKEN`. */
     requestAuthToken() { return this.#postToParent({ type: 'REQUEST_TPEN_ID_TOKEN' }) }
-
-    /** Ask the parent frame to send `TPEN_CONTEXT`. */
-    requestContext() { return this.#postToParent({ type: 'REQUEST_TPEN_CONTEXT' }) }
 }

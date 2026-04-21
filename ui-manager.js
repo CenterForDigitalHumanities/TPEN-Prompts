@@ -10,6 +10,7 @@
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
 import { lineCreateEndpoint, pageEndpoint } from './tpen-service.js'
+import { trailingId } from './iiif-ids.js'
 
 /**
  * Build a DOM element. Recognizes a few special prop keys:
@@ -58,6 +59,14 @@ const OPTIONAL_ID_FIELDS = [
 export class UIManager {
     /** Full (untruncated) prompt from the last Generate, used by Copy. */
     #fullPrompt = null
+    /** Token-consent button in the workspace header; removed once a token arrives. */
+    #authButton = null
+    /** "Line" meta row value node; updated when the parent sends UPDATE_CURRENT_LINE. */
+    #lineMetaValue = null
+    /** Generate button; disabled until a token is held (prompts bake the token in). */
+    #generateBtn = null
+    /** Hint shown alongside Generate when disabled; removed once a token is held. */
+    #generateHint = null
 
     /**
      * @param {string} [rootId='app'] id of the element to render into.
@@ -89,34 +98,22 @@ export class UIManager {
     }
 
     /**
-     * Render a waiting screen with optional "Request token" / "Request context"
-     * buttons. Used when the app is iframed and has no token, or has a token
-     * but no projectID. The automatic outbound request is fired by the caller
-     * — the buttons here exist for manual retry when the first request was
-     * dropped.
+     * First-paint screen shown when iframed before the parent has pushed a
+     * `TPEN_CONTEXT` payload. Carries the token-consent button so the user
+     * can authorize AI token usage up front; the workspace takes over as soon
+     * as `TPEN_CONTEXT` arrives.
      * @param {{ message: string,
      *           showAuthButton?: boolean,
-     *           showContextButton?: boolean,
-     *           onRequestAuth?: () => void,
-     *           onRequestContext?: () => void }} params
+     *           onRequestAuth?: () => void }} params
      */
-    renderAwaitingParent({ message, showAuthButton = false, showContextButton = false, onRequestAuth, onRequestContext }) {
+    renderAwaitingParent({ message, showAuthButton = false, onRequestAuth }) {
         const children = [
             el('div', { class: 'status info', text: message, attrs: { role: 'status', 'aria-live': 'polite' } })
         ]
-        const buttons = []
         if (showAuthButton && onRequestAuth) {
             const b = el('button', { type: 'button', text: 'Allow AI To Use My TPEN Token' })
             b.addEventListener('click', onRequestAuth)
-            buttons.push(b)
-        }
-        if (showContextButton && onRequestContext) {
-            const b = el('button', { type: 'button', text: 'Get Page Context For AI Prompts' })
-            b.addEventListener('click', onRequestContext)
-            buttons.push(b)
-        }
-        if (buttons.length) {
-            children.push(el('div', { class: 'controls' }, buttons))
+            children.push(el('div', { class: 'controls' }, [b]))
             children.push(el('p', { class: 'hint', text: 'This will allow agentic AI to work on your behalf.  This work will be attributed to your user.  You are accountable for what occurs.'}))
         }
         this.#replace(el('section', { class: 'card' }, children))
@@ -154,11 +151,14 @@ export class UIManager {
      * generate/copy controls. Stores `context` on `this.state` so generate/copy
      * handlers can read from it later.
      * @param {object} context
+     * @param {() => void} [context.onRequestAuth] invoked when the user clicks
+     *   the in-workspace token-consent button. The button is only shown when
+     *   `context.token` is falsy.
      */
     renderWorkspace(context) {
         this.state = { ...this.state, ...context }
         const { project, page, layer, column, line,
-                projectID, pageID, layerID, columnID, lineID } = this.state
+                projectID, pageID, layerID, columnID, lineID, token, onRequestAuth } = this.state
 
         const metaRows = [
             ['Project', project?.label ?? project?.title ?? projectID]
@@ -166,24 +166,49 @@ export class UIManager {
         if (pageID)   metaRows.push(['Page',   labelOf(page,   pageID)])
         if (layerID)  metaRows.push(['Layer',  labelOf(layer,  layerID)])
         if (columnID) metaRows.push(['Column', labelOf(column, columnID)])
-        if (lineID)   metaRows.push(['Line',   labelOf(line,   lineID)])
+        // Always include the Line row so UPDATE_CURRENT_LINE has a target to
+        // mutate without a full re-render.
+        const lineValue = lineID ? labelOf(line, lineID) : '(none selected)'
+        metaRows.push(['Line', lineValue])
 
         const meta = el('dl', { class: 'meta' })
+        this.#lineMetaValue = null
         for (const [k, v] of metaRows) {
-            meta.append(el('dt', { text: k }), el('dd', { text: String(v) }))
+            const dd = el('dd', { text: String(v) })
+            meta.append(el('dt', { text: k }), dd)
+            if (k === 'Line') this.#lineMetaValue = dd
         }
 
-        const header = el('header', { class: 'workspace-header' }, [
+        this.#authButton = null
+        const headerChildren = [
             el('h1', { text: 'TPEN AI Prompt Builder' }),
             meta
-        ])
+        ]
+        if (!token && onRequestAuth) {
+            const b = el('button', { type: 'button', class: 'auth-btn', text: 'Allow AI To Use My TPEN Token' })
+            b.addEventListener('click', onRequestAuth)
+            this.#authButton = b
+            headerChildren.push(b)
+        }
+        const header = el('header', { class: 'workspace-header' }, headerChildren)
 
         const select = el('select', { id: 'template-select' })
         for (const t of listTemplates()) {
             select.append(el('option', { value: t.id, text: t.label }))
         }
 
-        const generateBtn = el('button', { type: 'button', id: 'generate-btn', text: 'Generate prompt' })
+        // Prompts embed the auth token; generating before consent yields an
+        // unusable prompt (templates render "(unable to resolve agent IRI…)").
+        // Gate Generate on token presence and nudge the user toward the consent
+        // button in the header.
+        const generateBtn = el('button', {
+            type: 'button', id: 'generate-btn', text: 'Generate prompt',
+            disabled: !token
+        })
+        this.#generateBtn = generateBtn
+        this.#generateHint = !token
+            ? el('span', { class: 'hint', text: 'Click "Allow AI To Use My TPEN Token" above to enable prompt generation.' })
+            : null
         const output = el('textarea', {
             id: 'output', readOnly: true, rows: 20, spellcheck: false,
             placeholder: 'Click “Generate prompt” to compose.'
@@ -199,17 +224,63 @@ export class UIManager {
             el('span', { text: `The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust.` })
         ])
 
+        const generateControls = [
+            el('label', {}, [el('span', { text: 'Prompt Options' }), select]),
+            generateBtn
+        ]
+        if (this.#generateHint) generateControls.push(this.#generateHint)
+
         this.#replace(el('section', { class: 'card' }, [
             header,
             warning,
-            el('div', { class: 'controls' }, [
-                el('label', {}, [el('span', { text: 'Prompt Options' }), select]),
-                generateBtn
-            ]),
+            el('div', { class: 'controls' }, generateControls),
             el('label', { class: 'output-label', htmlFor: 'output', text: 'Generated prompt' }),
             output,
             el('div', { class: 'controls' }, [copyBtn, feedback])
         ]))
+    }
+
+    /**
+     * Update the stored token and remove the in-workspace consent button if
+     * it's on screen. Called from `PromptsApp.acceptAuth` when the parent
+     * sends `TPEN_ID_TOKEN`. A no-op when the workspace hasn't been rendered
+     * yet — the next `renderWorkspace` call will read the new token from
+     * `context.token`.
+     * @param {string|null} token
+     */
+    updateToken(token) {
+        this.state.token = token ?? null
+        if (!token) return
+        if (this.#authButton) {
+            this.#authButton.remove()
+            this.#authButton = null
+        }
+        if (this.#generateBtn) this.#generateBtn.disabled = false
+        if (this.#generateHint) {
+            this.#generateHint.remove()
+            this.#generateHint = null
+        }
+    }
+
+    /**
+     * Update the current line id without re-rendering the workspace. Mutates
+     * `state.lineID` so the next Generate picks it up, and refreshes the
+     * "Line" meta row if present. Also resolves `state.line` against
+     * `page.items` when available so templates that expect a line object see
+     * the full annotation.
+     * @param {string} lineID short id or ''; full IRIs should be trimmed by
+     *   the caller.
+     */
+    updateCurrentLine(lineID) {
+        this.state.lineID = lineID ?? ''
+        this.state.line = lineID && this.state.page?.items
+            ? (this.state.page.items.find(it => trailingId(it) === lineID) ?? null)
+            : null
+        if (this.#lineMetaValue) {
+            this.#lineMetaValue.textContent = this.state.lineID
+                ? labelOf(this.state.line, this.state.lineID)
+                : '(none selected)'
+        }
     }
 
     /**

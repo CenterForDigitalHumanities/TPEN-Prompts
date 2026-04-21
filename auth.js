@@ -2,10 +2,11 @@
  * @file Auth resolution for TPEN-Prompts.
  *
  * This tool never initiates login. A token is supplied externally — either via
- * the parent transcription interface's `AUTH_TOKEN` postMessage (when embedded
- * as a splitscreen tool) or via `?idToken=` on the URL (when opened standalone
- * from TPEN3 with a returnTo). Same localStorage key (`userToken`) and URL-param
- * name (`idToken`) as tpen3-interfaces, so stored sessions are interchangeable.
+ * the parent transcription interface's `TPEN_ID_TOKEN` postMessage (when
+ * embedded as a splitscreen tool) or via `?idToken=` on the URL (when opened
+ * standalone from TPEN3 with a returnTo). Same localStorage key (`userToken`)
+ * and URL-param name (`idToken`) as tpen3-interfaces, so stored sessions are
+ * interchangeable.
  *
  * @author thehabes
  */

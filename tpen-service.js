@@ -45,22 +45,11 @@ export function fetchProject(projectID, token) {
 }
 
 /**
- * Fetch a TPEN Page within a project.
- * @param {string} projectID
- * @param {string} pageID short id or full IRI; only the trailing segment is used server-side.
- * @param {string} token
- * @returns {Promise<any>}
- */
-export function fetchPage(projectID, pageID, token) {
-    return authedGet(`/project/${encodeURIComponent(projectID)}/page/${encodeURIComponent(pageID)}`, token)
-}
-
-/**
  * Fetch a TPEN Page with its line annotations hydrated server-side. The
  * `/resolved` variant returns each entry in `items[]` as a full Annotation
  * (with `target.selector.value`) rather than an id/type stub.
  * @param {string} projectID
- * @param {string} pageID
+ * @param {string} pageID short id or full IRI; only the trailing segment is used server-side.
  * @param {string} token
  * @returns {Promise<any>}
  */

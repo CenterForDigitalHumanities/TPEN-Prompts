@@ -92,7 +92,7 @@ function extractXywh(item) {
  * Render the current line annotations on a page as a markdown bullet list
  * keyed by trailing line id and xywh selector. Pre-resolving this list in the
  * parent saves the LLM a GET + parse round trip.
- * @param {any} fetchedPage the page object returned by `fetchPage`.
+ * @param {any} fetchedPage the page object returned by `fetchPageResolved`.
  * @returns {string}
  */
 export function formatExistingLines(fetchedPage) {
@@ -114,7 +114,7 @@ export function formatExistingLines(fetchedPage) {
  * not hydrate `layer.pages[].columns` for every page.
  * @param {any} project the TPEN project object.
  * @param {string|null|undefined} pageID the short page id or full page IRI.
- * @param {any} [fetchedPage] the page object returned by `fetchPage`, preferred when available.
+ * @param {any} [fetchedPage] the page object returned by `fetchPageResolved`, preferred when available.
  * @returns {string}
  */
 export function formatExistingColumns(project, pageID, fetchedPage = null) {

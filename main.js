@@ -1,9 +1,13 @@
 /**
  * @file TPEN-Prompts orchestrator.
  *
- * On load: resolve auth, read URL params, fetch project (+ optionally page),
- * resolve layer/column/line from the project graph, hand off to the UI.
- * Same bootstrap shape as tpen-page-viewer/viewer.js.
+ * Iframed mode: the parent pushes one `TPEN_CONTEXT` payload on iframe load
+ * carrying the fully-hydrated `project`, `page`, and `canvas` objects. The
+ * child renders directly from that payload — no REST round-trips, no request/
+ * reply handshake. The `TPEN_ID_TOKEN` flow remains user-gated and separate.
+ *
+ * Standalone mode: reads URL params, fetches project (+ optionally page) from
+ * the TPEN services API, resolves layer/column/line from the project graph.
  *
  * @author thehabes
  */
@@ -28,50 +32,36 @@ export class PromptsApp {
         this.messages = new MessageHandler(this)
         /** @type {string|null} */
         this.token = null
-        /**
-         * Context received from the parent before a token was held; applied
-         * once the user authorizes. Stores the full `TPEN_CONTEXT` payload as
-         * received from `acceptContext`.
-         * @type {Parameters<PromptsApp['acceptContext']>[0] | null}
-         */
-        this.pendingContext = null
     }
 
     /**
-     * Bootstrap the app. Pulls URL params and either renders the id form
-     * (standalone with a token) or waits on parent auth (iframed / no token).
+     * Bootstrap the app. Iframed: show an awaiting screen and wait for the
+     * parent to push `TPEN_CONTEXT`. Standalone: render the id-entry form
+     * (or load directly when `projectID` is in the URL).
      * @returns {Promise<void>}
      */
     async init() {
-        await initTemplates()
         const iframed = window.parent !== window
 
-        // Iframed mode requires fresh consent on every page load — clear any
-        // cached token before resolving so the user always re-clicks "Request
-        // TPEN token from parent". Standalone mode keeps the cached token.
+        // Paint the awaiting screen SYNCHRONOUSLY, before any await. Otherwise
+        // a `TPEN_CONTEXT` message that lands during `await initTemplates()`
+        // renders the workspace, and then this init() continuation silently
+        // overwrites it with the awaiting screen.
         if (iframed) {
             clearStoredToken()
             this.token = null
-        } else {
-            this.token = resolveToken()
+            this.ui.renderAwaitingParent({
+                message: 'Awaiting TPEN session — context will load from the parent.',
+                showAuthButton: true,
+                onRequestAuth: () => this.messages.requestAuthToken()
+            })
         }
 
-        // Never initiate login. Auth arrives via parent postMessage (iframed)
-        // or ?idToken= on the URL (standalone). If neither is available, stay
-        // in the awaiting state — the user clicks the token button to consent.
-        if (iframed || !this.token) {
-            this.ui.renderAwaitingParent({
-                message: 'Awaiting TPEN session — request a token to authorize this tool.',
-                showAuthButton: iframed,
-                showContextButton: false,
-                onRequestAuth: () => this.messages.requestAuthToken(),
-                onRequestContext: () => this.messages.requestContext()
-            })
-            // Context can be fetched without consent, so kick that off now and
-            // cache it. The user still has to click for the token.
-            if (iframed) this.messages.requestContext()
-            return
-        }
+        await initTemplates()
+
+        if (iframed) return
+
+        if (!this.token) this.token = resolveToken()
 
         const params = new URLSearchParams(location.search)
         const args = Object.fromEntries(PARAM_KEYS.map(k => [k, params.get(k) ?? '']))
@@ -88,9 +78,9 @@ export class PromptsApp {
     }
 
     /**
-     * Accept an auth payload from the parent frame. If a context payload
-     * arrived before the token was authorized, render the workspace from it;
-     * otherwise re-request context.
+     * Accept an auth payload from the parent frame. Stores the token and
+     * propagates it to any workspace already on screen so the next prompt
+     * generation includes it.
      * @param {{ token: string|null }} payload
      */
     acceptAuth({ token }) {
@@ -100,131 +90,72 @@ export class PromptsApp {
             this.ui.setStatus('Parent sent no valid token; reload the parent to re-authenticate.', 'error')
             return
         }
-        // Apply context that arrived before the token was authorized.
-        if (this.pendingContext?.projectID) {
-            const ctx = this.pendingContext
-            this.pendingContext = null
-            this.#applyContextFromPayload(ctx)
-            return
-        }
-        // No context yet — re-request it. Surface the manual button in case
-        // the initial auto-request was dropped (parentOrigin wasn't set when
-        // init fired).
-        this.ui.renderAwaitingParent({
-            message: 'Token received — fetching project context…',
-            showContextButton: true,
-            onRequestContext: () => this.messages.requestContext()
-        })
-        this.messages.requestContext()
+        this.ui.updateToken(this.token)
     }
 
     /**
-     * Accept a `TPEN_CONTEXT` payload from the parent. If a token is already
-     * held, render the workspace immediately from the payload — no service
-     * fetches. Otherwise cache the payload and wait for the user to authorize
-     * the token.
-     * @param {{ projectID: string|null, projectLabel: string|null,
-     *           pageID: string|null, pageLabel?: string|null,
-     *           canvasId: string|null, canvasWidth: number|null, canvasHeight: number|null,
-     *           imageUrl: string|null, manifestUri: string|null, columns: Array }} payload
-     * @returns {Promise<void>}
+     * Accept a `TPEN_CONTEXT` payload from the parent. The payload is expected
+     * to carry hydrated `project`, `page`, and `canvas` objects; anything
+     * missing is resolved here as a safety net — REST fetches for project/page
+     * (auth required), direct HTTP for the canvas via its IIIF id on
+     * `page.target`.
+     * @param {{ project: any, page: any, canvas: any, currentLineId: string|null }} payload
      */
     async acceptContext(payload) {
-        if (!payload?.projectID) {
-            this.ui.setStatus('Parent returned no projectID.', 'error')
-            return
-        }
-        if (!this.token) {
-            this.pendingContext = payload
-            this.ui.renderAwaitingParent({
-                message: 'TPEN context received — permit token usage to continue.',
-                showAuthButton: true,
-                showContextButton: false,
-                onRequestAuth: () => this.messages.requestAuthToken(),
-                onRequestContext: () => this.messages.requestContext()
-            })
-            return
-        }
-        this.#applyContextFromPayload(payload)
-    }
+        let project = payload?.project ?? null
+        let page = payload?.page ?? null
+        let canvas = payload?.canvas ?? null
 
-    /**
-     * Render the workspace from a TPEN_CONTEXT payload. Builds minimal
-     * `project` / `canvas` stubs from the payload; fetches the full page when
-     * a pageID and token are available so `page.items` (line annotations) are
-     * populated for template helpers like `formatExistingLines`. Falls back to
-     * a page stub if the fetch fails.
-     * @param {{ projectID: string, projectLabel?: string|null,
-     *           pageID?: string|null, pageLabel?: string|null,
-     *           canvasId?: string|null, canvasWidth?: number|null, canvasHeight?: number|null,
-     *           imageUrl?: string|null, manifestUri?: string|null, columns?: Array }} payload
-     */
-    async #applyContextFromPayload(payload) {
-        // Start from a stub so renderWorkspace can run even if the project
-        // fetch fails; upgrade to the full record when available since it
-        // carries the manifest URI that TPEN_CONTEXT sometimes omits.
-        let project = { id: payload.projectID, label: payload.projectLabel ?? payload.projectID }
-        if (this.token) {
-            try {
-                project = await fetchProject(payload.projectID, this.token)
-            } catch (err) {
-                console.warn('fetchProject failed; using stub', err)
-            }
+        let projectID = project?._id ?? project?.id ?? null
+        if (!projectID) {
+            this.ui.setStatus('Parent sent no project.', 'error')
+            return
         }
-        let page = null
-        if (payload.pageID) {
-            if (this.token) {
-                try {
-                    page = await fetchPageResolved(payload.projectID, payload.pageID, this.token)
-                } catch (err) {
-                    console.warn('fetchPageResolved failed; falling back to stub', err)
-                }
-            }
-            page ??= { id: payload.pageID, label: payload.pageLabel ?? null, columns: payload.columns ?? [] }
+
+        // Upgrade a stub project (no layers) when we have a token.
+        if (!project.layers && this.token) {
+            try { project = await fetchProject(projectID, this.token) } catch (err) { console.warn('fetchProject failed', err) }
         }
-        let canvas = payload.canvasId ? {
-            id: payload.canvasId,
-            width: payload.canvasWidth ?? null,
-            height: payload.canvasHeight ?? null,
-            partOf: payload.manifestUri ?? null,
-            items: payload.imageUrl
-                ? [{ items: [{ body: { id: payload.imageUrl } }] }]
-                : []
-        } : null
-        // Payload may arrive before the parent has loaded its canvas. When canvas
-        // fields are missing — or present but incomplete (no dimensions / image /
-        // manifest) — resolve from the page target directly so templates get the
-        // full canvas record.
-        const needsCanvasFetch = page && (
-            !canvas
-            || canvas.width == null
-            || canvas.height == null
-            || !canvas.partOf
-            || (Array.isArray(canvas.items) && canvas.items.length === 0)
-        )
-        if (needsCanvasFetch) {
-            const resolved = await resolveCanvasForPage(page)
-            // resolveCanvasForPage falls back to { id } on fetch failure; only
-            // promote it when it actually carries canvas fields we need.
-            if (resolved && (resolved.items || resolved.width || resolved.partOf)) {
-                canvas = resolved
-            }
+
+        const pageID = page ? (trailingId(page) ?? '') : ''
+        // Upgrade a stub page (no items) when we have a token and a pageID.
+        if (page && !Array.isArray(page.items) && this.token && pageID) {
+            try { page = await fetchPageResolved(projectID, pageID, this.token) ?? page } catch (err) { console.warn('fetchPageResolved failed', err) }
         }
-        // Canvases don't always declare partOf; the project record does carry
-        // a manifest URI, so fall back to it when the canvas has none.
+
+        // Resolve the canvas from page.target (IIIF canvas URI) when the
+        // parent didn't hydrate it. No auth needed; canvases are public IIIF.
+        if (!canvas && page) {
+            canvas = await resolveCanvasForPage(page)
+        }
+        // Fall back to the project manifest when the canvas lacks partOf, so
+        // templates can still render a manifest URI.
         if (canvas && !canvas.partOf) {
             const projectManifest = Array.isArray(project?.manifest) ? project.manifest[0] : project?.manifest
             if (projectManifest) canvas.partOf = projectManifest
         }
 
+        const lineID = payload.currentLineId ? (trailingId(payload.currentLineId) ?? '') : ''
+
         this.ui.renderWorkspace({
-            projectID: payload.projectID,
-            pageID: payload.pageID ?? '',
-            layerID: '', columnID: '', lineID: '',
+            projectID,
+            pageID,
+            layerID: '', columnID: '',
+            lineID,
             project, page, canvas,
             layer: null, column: null, line: null,
-            token: this.token
+            token: this.token,
+            onRequestAuth: () => this.messages.requestAuthToken()
         })
+    }
+
+    /**
+     * Update the current line id on the rendered workspace. Called when the
+     * parent sends `UPDATE_CURRENT_LINE` in response to line navigation.
+     * @param {string|null} lineId full line IRI or null.
+     */
+    updateCurrentLine(lineId) {
+        this.ui.updateCurrentLine(lineId ? (trailingId(lineId) ?? '') : '')
     }
 
     /**
