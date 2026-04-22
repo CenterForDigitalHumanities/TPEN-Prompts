@@ -19,14 +19,16 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
-1. Vision capability: load the page image as raw bytes and measure pixel coordinates on it.
+1. Vision capability: load the page image as raw bytes and measure coordinates programmatically from the full-resolution pixel data. Any image preview rendered back to you is downsampled — never read coordinates off a previewed image by eye.
 2. HTTP POST and PUT capability with `Content-Type: application/json`.
+
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities (`pip`, `npm`, `apt`, `brew`, `cargo`, `--break-system-packages`, etc.) — if a required capability is missing, stop and return a failure report naming it rather than installing anything.
 
 If any precondition fails, stop and return a concise failure report.
 
 ## Steps
 
-1. Fetch the page image. Read its actual pixel dimensions (`img_w`, `img_h`) — the IIIF server may return a scaled rendering, not the canvas-native resolution.
+1. Resolve `img_w`, `img_h`. If `{{imageUrl}}` looks like a IIIF Image API endpoint (path matches `…/{region}/{size}/{rotation}/{quality}.{format}`), strip that suffix to get `{base}`, then GET `{base}/info.json` for the dimensions. For the page-overview pass, prefer a small derivative `{base}/full/1500,/0/default.jpg` and scale measured coordinates back via `source = derivative * info.width / 1500`. When you need to inspect a specific region at full fidelity, request it server-side as `{base}/x,y,w,h/max/0/default.jpg` rather than downloading the whole page and cropping locally. Otherwise GET `{{imageUrl}}` once and read dimensions from the bytes. If you measured coordinates inside a region crop, add the crop's `x,y` origin back before applying the canvas conversion below.
 2. Detect main text column regions in reading order first, then detect the lines inside each column (reading order preserved within each column). If the page visibly has a single text block, create one column containing every detected line — do not subdivide. Track each line's column index (an integer, 0-based) as you detect it.
 3. For every line, measure a bounding box in image-pixel space and convert to integer canvas coordinates using:
    - `canvas_x = round(pixel_x * {{canvasWidth}} / img_w)`

@@ -23,14 +23,16 @@ All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`,
 
 You must have:
 
-1. Vision capability: load the page image as raw bytes and crop/inspect per-line regions. A fetcher that returns only a prose description of the image does not count.
+1. Vision capability: load the page image as raw bytes and crop/inspect per-line regions. A fetcher that returns only a prose description of the image does not count. Any image preview rendered back to you is downsampled — never read coordinates off a previewed image by eye.
 2. HTTP PATCH capability (with `Content-Type: text/plain`).
+
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities (`pip`, `npm`, `apt`, `brew`, `cargo`, `--break-system-packages`, etc.) — if a required capability is missing, stop and return a failure report naming it rather than installing anything.
 
 If any precondition fails, stop and return a concise failure report naming the missing capability.
 
 ## Steps
 
-1. Fetch the page image. Read its actual pixel dimensions (`img_w`, `img_h`) — the IIIF server may return a scaled rendering, not the canvas-native resolution. The `xywh` selectors above are in canvas space; convert each to image-pixel space before cropping using:
+1. Resolve `img_w`, `img_h`. If `{{imageUrl}}` looks like a IIIF Image API endpoint (path matches `…/{region}/{size}/{rotation}/{quality}.{format}`), strip that suffix to get `{base}` and GET `{base}/info.json` for the dimensions; fetch each line's region server-side as `{base}/x,y,w,h/max/0/default.jpg` rather than downloading the whole page and cropping locally. Otherwise GET `{{imageUrl}}` once and read dimensions from the bytes. The `xywh` selectors above are in canvas space; convert each to image-pixel space (for the IIIF region URL or the local crop) using:
    - `pixel_x = round(canvas_x * img_w / {{canvasWidth}})`
    - `pixel_y = round(canvas_y * img_h / {{canvasHeight}})`
    - `pixel_w = round(canvas_w * img_w / {{canvasWidth}})`
