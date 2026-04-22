@@ -85,7 +85,7 @@ Content-Type: application/json
 }
 ```
 
-On any non-2xx response, stop the operation in progress and include the HTTP status and response body in the failure report.
+On any non-2xx response, stop and include the HTTP status and response body in the failure report.
 
 ## Completion
 
