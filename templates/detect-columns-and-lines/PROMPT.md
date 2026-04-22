@@ -19,16 +19,14 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
-1. Programmatic pixel access to the full-resolution image — a numeric pixel buffer you can iterate over. A prose description of the image, or any measurement taken from a rendered or previewed image, does not qualify; previews are downsampled and visually estimated bounds will be wrong. **If you cannot obtain pixel data with the capabilities already available to you, stop now and return a failure report naming the missing capability.**
+1. Ability to fetch the image bytes (or a derivative) and identify line and column bounds from them. Precise pixel measurement is preferred when available; visual estimation from the fetched image is acceptable otherwise.
 2. HTTP POST and PUT capability with `Content-Type: application/json`.
 
-Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is missing, stop and return a failure report naming it rather than installing anything.
-
-If any precondition fails, stop and return a concise failure report.
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is genuinely missing (e.g. no way to issue an HTTP PUT or POST), stop and return a failure report naming it rather than installing anything.
 
 ## Steps
 
-1. Resolve `img_w`, `img_h`. If `{{imageUrl}}` looks like a IIIF Image API endpoint (path matches `…/{region}/{size}/{rotation}/{quality}.{format}`), strip that suffix to get `{base}`, then GET `{base}/info.json` for the dimensions. For the page-overview pass, prefer a small derivative `{base}/full/1500,/0/default.jpg` and scale measured coordinates back via `source = derivative * info.width / 1500`. When you need to inspect a specific region at full fidelity, request it server-side as `{base}/x,y,w,h/max/0/default.jpg` rather than downloading the whole page and cropping locally. Otherwise GET `{{imageUrl}}` once and read dimensions from the bytes. If you measured coordinates inside a region crop, add the crop's `x,y` origin back before applying the canvas conversion below.
+1. Resolve `img_w`, `img_h`. If `{{imageUrl}}` looks like a IIIF Image API endpoint (path matches `…/{region}/{size}/{rotation}/{quality}.{format}`), strip that suffix to get `{base}`, then GET `{base}/info.json` for the dimensions. For the page-overview pass, fetch a small derivative `{base}/full/1500,/0/default.jpg` and scale measured coordinates back via `source = derivative * info.width / 1500`. If you have precise pixel tooling and want tighter bounds on a region, request it server-side as `{base}/x,y,w,h/max/0/default.jpg` and add the crop's `x,y` origin back before applying the canvas conversion below. Otherwise GET `{{imageUrl}}` once and read dimensions from the bytes.
 2. Detect main text column regions in reading order first, then detect the lines inside each column (reading order preserved within each column). If the page visibly has a single text block, create one column containing every detected line — do not subdivide. Track each line's column index (an integer, 0-based) as you detect it.
 3. For every line, measure a bounding box in image-pixel space and convert to integer canvas coordinates using:
    - `canvas_x = round(pixel_x * {{canvasWidth}} / img_w)`
@@ -47,9 +45,10 @@ If any precondition fails, stop and return a concise failure report.
 - Each line annotation belongs to at most one column.
 - Preserve reading order across columns and within each column.
 - Line geometry is the primary accuracy target. Column grouping is secondary — for a single-column page, one column containing every line is correct.
-- Lines must be tight. Bound the actual text stroke run and nothing more. Never emit a single line that covers what a human reader would call two or more lines; when uncertain whether a tall run is one line or several, split it.
-- Do not include decorative borders, frame rules, ornaments, illustrations, or the inter-line whitespace above/below text as part of a line.
+- Prefer tight bounds when you can measure them; best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
+- Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
 - Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
+- Completion beats refusal: approximate bounds on most lines are more useful than nothing — this data will be reviewed and corrected downstream.
 
 ## TPEN API
 
