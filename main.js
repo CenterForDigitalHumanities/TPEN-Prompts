@@ -110,17 +110,14 @@ export class PromptsApp {
             return
         }
 
-        const hasSelector = item => {
-            const t = item?.target
-            if (typeof t === 'string') return t.includes('#xywh=')
-            const sel = t?.selector
-            const val = Array.isArray(sel) ? sel[0]?.value : sel?.value
-            return typeof val === 'string' && val.includes('xywh=')
-        }
+        // Hydrated items carry more than `{id, type}`; unhydrated vault refs
+        // carry only those two keys.
+        const isHydratedItem = it => it && typeof it === 'object' &&
+            (it.target !== undefined || it.body !== undefined || it.motivation !== undefined)
 
         const isPageHydrated = p =>
             Array.isArray(p?.items) &&
-            (p.items.length === 0 || hasSelector(p.items[0]))
+            (p.items.length === 0 || isHydratedItem(p.items[0]))
 
         const isProjectHydrated = p =>
             Array.isArray(p?.layers) &&

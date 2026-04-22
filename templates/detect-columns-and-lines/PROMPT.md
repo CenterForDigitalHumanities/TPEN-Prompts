@@ -19,10 +19,10 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
-1. Programmatic pixel measurement. You must be able to open the full-resolution image and read its pixel array directly (e.g. an image-decoding library that yields a 2D/3D numeric buffer your code can iterate over). Reading the file bytes is not enough — you need pixel access. **Eyeballing coordinates from any rendered/previewed image is forbidden and counts as a missing capability**, because every preview shown back to you is downsampled and visually estimated bounds will be wrong.  Run a one-line probe that proves you can read pixel data programmatically.  If the probe fails — module not found, no decoder available, or any other reason you cannot get a numeric pixel array out of the image without installing anything — stop immediately.  You may suggestion options for your given environment or LLM capabilities in your failure report.
+1. Programmatic pixel access to the full-resolution image — a numeric pixel buffer you can iterate over. A prose description of the image, or any measurement taken from a rendered or previewed image, does not qualify; previews are downsampled and visually estimated bounds will be wrong. **If you cannot obtain pixel data with the capabilities already available to you, stop now and return a failure report naming the missing capability.**
 2. HTTP POST and PUT capability with `Content-Type: application/json`.
 
-Use only tools already available in your environment. Do not install packages, libraries, or system utilities (`pip`, `npm`, `apt`, `brew`, `cargo`, `--break-system-packages`, etc.) — if a required capability is missing, stop and return a failure report naming it rather than installing anything.
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is missing, stop and return a failure report naming it rather than installing anything.
 
 If any precondition fails, stop and return a concise failure report.
 

@@ -23,10 +23,10 @@ All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`,
 
 You must have:
 
-1. Vision capability: fetch each line's region as image bytes (e.g. via a IIIF region URL) and read the inked glyphs directly. A fetcher that returns only a prose description of the image does not count, and any preview rendered back into chat is downsampled — do not transcribe from a preview.
+1. Vision capability: fetch each line's region as image bytes (e.g. via a IIIF region URL) and read the inked glyphs directly. A fetcher that returns only a prose description of the image does not qualify, and any preview rendered back into chat is downsampled — do not transcribe from a preview. **If you cannot read image bytes directly with the capabilities already available to you, stop now and return a failure report naming the missing capability.**
 2. HTTP PATCH capability (with `Content-Type: text/plain`).
 
-Use only tools already available in your environment. Do not install packages, libraries, or system utilities (`pip`, `npm`, `apt`, `brew`, `cargo`, `--break-system-packages`, etc.) — if a required capability is missing, stop and return a failure report naming it rather than installing anything.
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is missing, stop and return a failure report naming it rather than installing anything.
 
 If any precondition fails, stop and return a concise failure report naming the missing capability.
 
