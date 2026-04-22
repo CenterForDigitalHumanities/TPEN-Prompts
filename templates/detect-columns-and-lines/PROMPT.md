@@ -19,7 +19,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
-1. Vision capability: load the page image as raw bytes and measure coordinates programmatically from the full-resolution pixel data. Any image preview rendered back to you is downsampled — never read coordinates off a previewed image by eye.
+1. Programmatic pixel measurement. You must be able to open the full-resolution image and read its pixel array directly (e.g. an image-decoding library that yields a 2D/3D numeric buffer your code can iterate over). Reading the file bytes is not enough — you need pixel access. **Eyeballing coordinates from any rendered/previewed image is forbidden and counts as a missing capability**, because every preview shown back to you is downsampled and visually estimated bounds will be wrong.  Run a one-line probe that proves you can read pixel data programmatically.  If the probe fails — module not found, no decoder available, or any other reason you cannot get a numeric pixel array out of the image without installing anything — stop immediately.  You may suggestion options for your given environment or LLM capabilities in your failure report.
 2. HTTP POST and PUT capability with `Content-Type: application/json`.
 
 Use only tools already available in your environment. Do not install packages, libraries, or system utilities (`pip`, `npm`, `apt`, `brew`, `cargo`, `--break-system-packages`, etc.) — if a required capability is missing, stop and return a failure report naming it rather than installing anything.
@@ -36,8 +36,8 @@ If any precondition fails, stop and return a concise failure report.
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
-4. PUT every detected line to the page endpoint in a single request (see TPEN API below). The response returns line ids in the same order as the submitted `items` — use positional mapping to recover ids per column index.
-5. For each column, POST `{ label, annotations }` where `annotations` is the server-assigned line ids that belong to that column index. Labels must be unique and must not clash with anything in "Existing columns on this page".
+4. PUT every detected line to the page endpoint in a single request (see TPEN API below).  Leave `body` empty — no text yet. The response returns line ids in the same order as the submitted `items` — use positional mapping to recover ids per column index.
+5. For each column, POST `{ label, annotations }` where each entry in `annotations` is the full annotation id (URI) returned by the PUT — not a trailing-segment shorthand. Labels must be unique and must not clash with anything in "Existing columns on this page".
 6. Report counts: lines saved, columns created, and any failures.
 
 ## Rules
@@ -46,8 +46,10 @@ If any precondition fails, stop and return a concise failure report.
 - Column labels are page-scoped and must be unique. Do not duplicate an existing column label.
 - Each line annotation belongs to at most one column.
 - Preserve reading order across columns and within each column.
-- Prefer high recall: include borderline columns/lines rather than silently dropping them.
-- Keep line boxes tight enough for line-level recognition but generous enough not to clip ascenders/descenders.
+- Line geometry is the primary accuracy target. Column grouping is secondary — for a single-column page, one column containing every line is correct.
+- Lines must be tight. Bound the actual text stroke run and nothing more. Never emit a single line that covers what a human reader would call two or more lines; when uncertain whether a tall run is one line or several, split it.
+- Do not include decorative borders, frame rules, ornaments, illustrations, or the inter-line whitespace above/below text as part of a line.
+- Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
 
 ## TPEN API
 
@@ -88,7 +90,7 @@ Content-Type: application/json
 
 {
   "label": "Column A",
-  "annotations": ["<server-line-id-1>", "<server-line-id-2>"]
+  "annotations": ["<server-line-uri-1>", "<server-line-uri-2>"]
 }
 ```
 

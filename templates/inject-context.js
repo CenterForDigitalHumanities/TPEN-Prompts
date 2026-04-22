@@ -97,8 +97,10 @@ function extractXywh(item) {
 
 /**
  * Render the current line annotations on a page as a markdown bullet list
- * keyed by trailing line id and xywh selector. Pre-resolving this list in the
- * parent saves the LLM a GET + parse round trip.
+ * keyed by full annotation URI and xywh selector. Pre-resolving this list in
+ * the parent saves the LLM a GET + parse round trip. Column POSTs require the
+ * full URI to match `page.items[].id` server-side; PATCH-line-text consumers
+ * can split the URI's trailing segment themselves.
  * @param {any} fetchedPage the page object returned by `fetchPageResolved`.
  * @returns {string}
  */
@@ -108,9 +110,9 @@ export function formatExistingLines(fetchedPage) {
         return '- (No existing lines on this page.)'
     }
     return items.map(item => {
-        const lineId = trailingId(item) ?? '(unknown)'
+        const lineUri = getIRI(item) ?? '(unknown)'
         const xywh = extractXywh(item) ?? '(no xywh selector)'
-        return `- ${lineId}: ${xywh}`
+        return `- ${lineUri}: ${xywh}`
     }).join('\n')
 }
 

@@ -17,7 +17,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Existing lines
 
-Each entry is `<lineId>: <xywh selector>` in canvas coordinates. Use these ids verbatim when assigning lines to columns.
+Each entry is `<annotation-uri>: <xywh selector>` in canvas coordinates. Use the full annotation URI verbatim when assigning lines to columns.
 
 {{existingLines}}
 
@@ -27,7 +27,7 @@ All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`,
 
 You must have:
 
-1. Vision capability: load the page image as raw bytes and measure coordinates programmatically from the full-resolution pixel data. Any image preview rendered back to you is downsampled — never read coordinates off a previewed image by eye.
+1. Programmatic pixel measurement. You must be able to open the full-resolution image and read its pixel array directly (e.g. an image-decoding library that yields a 2D/3D numeric buffer your code can iterate over). Reading the file bytes is not enough — you need pixel access. **Eyeballing coordinates from any rendered/previewed image is forbidden and counts as a missing capability**, because every preview shown back to you is downsampled and visually estimated bounds will be wrong.  Run a one-line probe that proves you can read pixel data programmatically.  If the probe fails — module not found, no decoder available, or any other reason you cannot get a numeric pixel array out of the image without installing anything — stop immediately.  You may suggestion options for your given environment or LLM capabilities in your failure report.
 2. HTTP POST capability with `Content-Type: application/json`.
 
 Use only tools already available in your environment. Do not install packages, libraries, or system utilities (`pip`, `npm`, `apt`, `brew`, `cargo`, `--break-system-packages`, etc.) — if a required capability is missing, stop and return a failure report naming it rather than installing anything.
@@ -55,10 +55,11 @@ If any precondition fails, stop and return a concise failure report.
 - Keep column boundaries tight enough that each line clearly belongs to one column, but generous enough to avoid clipping existing line selectors.
 - Column labels are page-scoped and must be unique. Do not duplicate an existing column label.
 - Annotations cannot be assigned to more than one column. If a line clearly sits in an existing column, do not reassign it.
+- Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
 
 ## TPEN API
 
-Create one POST per detected column. Each `annotations` array contains the line ids assigned to that column in step 4, taken verbatim from the "Existing lines" list above (trailing id segment only).
+Create one POST per detected column. Each `annotations` array contains the full annotation URIs assigned to that column in step 4, taken verbatim from the "Existing lines" list above.
 
 ```
 POST {{pageEndpoint}}/column
@@ -67,11 +68,11 @@ Content-Type: application/json
 
 {
   "label": "Column A",
-  "annotations": ["<line-id-1>", "<line-id-2>", "<line-id-3>"]
+  "annotations": ["<annotation-uri-1>", "<annotation-uri-2>", "<annotation-uri-3>"]
 }
 ```
 
-Each `<line-id>` is the trailing id segment of a line annotation listed above.
+Each `<annotation-uri>` is the full id of a line annotation listed above, used verbatim.
 
 On any non-2xx response, stop the column in progress and include the HTTP status and response body in the failure report.
 

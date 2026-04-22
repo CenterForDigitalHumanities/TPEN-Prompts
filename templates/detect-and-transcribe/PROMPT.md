@@ -15,7 +15,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
-1. Vision capability: load the page image as raw bytes, measure pixel coordinates programmatically from the full-resolution data, and crop/inspect per-line regions. Any image preview rendered back to you is downsampled — never read coordinates off a previewed image by eye.
+1. Programmatic pixel measurement. You must be able to open the full-resolution image and read its pixel array directly (e.g. an image-decoding library that yields a 2D/3D numeric buffer your code can iterate over). Reading the file bytes is not enough — you need pixel access. **Eyeballing coordinates from any rendered/previewed image is forbidden and counts as a missing capability**, because every preview shown back to you is downsampled and visually estimated bounds will be wrong.  Run a one-line probe that proves you can read pixel data programmatically.  If the probe fails — module not found, no decoder available, or any other reason you cannot get a numeric pixel array out of the image without installing anything — stop immediately.  You may suggestion options for your given environment or LLM capabilities in your failure report.
 2. HTTP PUT capability with `Content-Type: application/json`.
 
 Use only tools already available in your environment. Do not install packages, libraries, or system utilities (`pip`, `npm`, `apt`, `brew`, `cargo`, `--break-system-packages`, etc.) — if a required capability is missing, stop and return a failure report naming it rather than installing anything.
@@ -24,26 +24,28 @@ If any precondition fails, stop and return a concise failure report.
 
 ## Steps
 
-1. Resolve `img_w`, `img_h`. If `{{imageUrl}}` looks like a IIIF Image API endpoint (path matches `…/{region}/{size}/{rotation}/{quality}.{format}`), strip that suffix to get `{base}`, then GET `{base}/info.json` for the dimensions. For the page-overview pass, prefer a small derivative `{base}/full/1500,/0/default.jpg` and scale measured coordinates back via `source = derivative * info.width / 1500`. When you need to inspect or transcribe a specific region at full fidelity, request it server-side as `{base}/x,y,w,h/max/0/default.jpg` rather than downloading the whole page and cropping locally. Otherwise GET `{{imageUrl}}` once and read dimensions from the bytes. If you measured coordinates inside a region crop, add the crop's `x,y` origin back before applying the canvas conversion below. Detect every text line in reading order and measure each line's bounding box in image-pixel space.
-2. Convert every bounding box to integer canvas coordinates using:
+1. Resolve `img_w`, `img_h`. If `{{imageUrl}}` looks like a IIIF Image API endpoint (path matches `…/{region}/{size}/{rotation}/{quality}.{format}`), strip that suffix to get `{base}`, then GET `{base}/info.json` for the dimensions. For the page-overview pass, prefer a small derivative `{base}/full/1500,/0/default.jpg` and scale measured coordinates back via `source = derivative * info.width / 1500`. When you need to inspect a specific region at full fidelity, request it server-side as `{base}/x,y,w,h/max/0/default.jpg` rather than downloading the whole page and cropping locally. Otherwise GET `{{imageUrl}}` once and read dimensions from the bytes. If you measured coordinates inside a region crop, add the crop's `x,y` origin back before applying the canvas conversion below.
+2. Detect text lines across the whole page in reading order. This task does not create TPEN columns.
+3. For every line, measure a bounding box in image-pixel space and convert to integer canvas coordinates using:
    - `canvas_x = round(pixel_x * {{canvasWidth}} / img_w)`
    - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
-3. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
-4. Build one Annotation per line with the recognized text as the `TextualBody` value and `xywh=x,y,w,h` (integer canvas coordinates).
-5. PUT the full set of line annotations to the page endpoint in a single request.
-6. Report counts (lines saved) and notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
+4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
+5. Build one Annotation per line with the recognized text as the `TextualBody` value and `xywh=x,y,w,h` as the bounding box fragment selector.
+6. PUT every detected line to the page endpoint in a single request (see TPEN API below).
+7. Report counts: lines saved, lines with non-empty text, lines flagged uncertain.
+8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
 
 ## Rules
 
 ### Detection (IMAGE_ANALYSIS)
 
 - Bounds MUST be saved as integer coordinates in canvas space. No percent, no `pixel:` prefix on the selector value.
-- Preserve reading order. Prefer high recall for likely text lines over aggressive pruning.
-- Keep line boxes tight but do not clip ascenders/descenders.
-- Include borderline regions rather than silently dropping them.
+- Preserve reading order across the whole page.
+- Lines must be tight. Bound the actual text stroke run and nothing more. Never emit a single line that covers what a human reader would call two or more lines; when uncertain whether a tall run is one line or several, split it.
+- Do not include decorative borders, frame rules, ornaments, illustrations, or the inter-line whitespace above/below text as part of a line.
 
 ### Recognition (HANDWRITING_TEXT_RECOGNITION)
 
@@ -56,7 +58,7 @@ If any precondition fails, stop and return a concise failure report.
 
 ## TPEN API
 
-Save every detected line with its transcription in a single PUT. The `items` array must contain one annotation per detected line; replace `x,y,w,h` with the integer canvas coordinates computed in step 2, and `<recognized line text>` with the recognized text (empty string for fully illegible lines).
+Save every detected line with its transcription in a single PUT. The `items` array must contain one annotation per detected line; replace `x,y,w,h` with the integer canvas coordinates computed in step 3, and `<recognized line text>` with the recognized text (empty string for fully illegible lines).
 
 ```
 PUT {{pageEndpoint}}
