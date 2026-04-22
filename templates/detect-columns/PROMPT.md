@@ -28,7 +28,7 @@ All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`,
 You must have:
 
 1. Programmatic pixel access to the full-resolution image — a numeric pixel buffer you can iterate over. A prose description of the image, or any measurement taken from a rendered or previewed image, does not qualify; previews are downsampled and visually estimated bounds will be wrong. **If you cannot obtain pixel data with the capabilities already available to you, stop now and return a failure report naming the missing capability.**
-2. HTTP POST capability with `Content-Type: application/json`.
+2. HTTP PUT and POST capability with `Content-Type: application/json`.
 
 Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is missing, stop and return a failure report naming it rather than installing anything.
 
@@ -45,8 +45,9 @@ If any precondition fails, stop and return a concise failure report.
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. For each detected column, determine which of the existing line ids (from the list above) belong to it. Assign a line to the column whose canvas-space region contains the center point of the line's `xywh`. If a line's center falls outside every detected column, assign it to the nearest column by Euclidean distance from the center point to the column's region (distance `0` when the point is inside). Each line belongs to exactly one column.
-5. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any label under "Existing columns on this page", then POST `{ label, annotations }` to the column endpoint. `annotations` is the array of line ids assigned to that column.
-6. Report the count of created columns and any per-column failures.
+5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center. Then PUT the page with `items` in that order so the page's canonical line list matches reading order (see TPEN API below). Each `items` entry re-uses the existing annotation URI verbatim as its `id` — the server preserves ids (and any already-attached body text) rather than minting new ones.
+6. For each column, POST `{ label, annotations }` to the column endpoint. `annotations` is the contiguous slice of the reading-order id sequence that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any label under "Existing columns on this page".
+7. Report the count of created columns and any per-column failures.
 
 ## Rules
 
@@ -56,10 +57,40 @@ If any precondition fails, stop and return a concise failure report.
 - Column labels are page-scoped and must be unique. Do not duplicate an existing column label.
 - Annotations cannot be assigned to more than one column. If a line clearly sits in an existing column, do not reassign it.
 - Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
+- The PUT `items` order defines the page's reading order; column `annotations` slices must match that same order.
+- The PUT must carry every existing line id exactly once. Do not drop, duplicate, or mint new ids; do not modify `body` or `target`.
 
 ## TPEN API
 
-Create one POST per detected column. Each `annotations` array contains the full annotation URIs assigned to that column in step 4, taken verbatim from the "Existing lines" list above.
+First, reorder the page's line list via a single PUT. The `items` array must contain every existing line — each entry carrying the existing annotation URI verbatim as `id` — in the reading-order sequence from step 5. Reuse each line's original `target` (the `xywh` selector listed under "Existing lines") unchanged.
+
+```
+PUT {{pageEndpoint}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "id": "<existing-annotation-uri>",
+      "type": "Annotation",
+      "@context": "http://www.w3.org/ns/anno.jsonld",
+      "target": {
+        "source": "{{canvasId}}",
+        "type": "SpecificResource",
+        "selector": {
+          "type": "FragmentSelector",
+          "conformsTo": "http://www.w3.org/TR/media-frags/",
+          "value": "xywh=x,y,w,h"
+        }
+      },
+      "motivation": "transcribing"
+    }
+  ]
+}
+```
+
+Then create one POST per detected column. Each `annotations` array is a contiguous slice of the reading-order id sequence, taken verbatim from the "Existing lines" list.
 
 ```
 POST {{pageEndpoint}}/column
@@ -74,19 +105,19 @@ Content-Type: application/json
 
 Each `<annotation-uri>` is the full id of a line annotation listed above, used verbatim.
 
-On any non-2xx response, stop the column in progress and include the HTTP status and response body in the failure report.
+On any non-2xx response, stop the operation in progress and include the HTTP status and response body in the failure report.
 
 ## Completion
 
 On success, report:
 
-- operation: `POST column`
-- target: `{{pageEndpoint}}/column`
+- operations: `PUT page`, `POST column` (×N)
+- target: {{pageEndpoint}} (page) and `{{pageEndpoint}}/column`
 - count: number of columns created
 - per-column line counts
 
 On failure, report:
 
-- the failing stage (image fetch, detection, POST)
-- HTTP status and error body for any failed POST
+- the failing stage (image fetch, detection, PUT, or a specific POST)
+- HTTP status and error body
 - recommended next step (e.g., choose a different label, reassign lines)
