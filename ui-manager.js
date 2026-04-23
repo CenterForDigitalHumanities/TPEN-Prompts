@@ -263,17 +263,15 @@ export class UIManager {
             text: 'Submit to TPEN',
             disabled: !ready
         })
-        const feedback = el('span', {
-            class: 'feedback', attrs: { 'aria-live': 'polite' },
-            text: ready ? '' : 'Needs a page context before submission is possible.'
-        })
+        const feedback = el('span', { class: 'feedback', attrs: { 'aria-live': 'polite' } })
         submit.addEventListener('click', () => this.#onFallbackSubmit(textarea, submit, feedback))
-        return el('details', { class: 'fallback' }, [
+        const children = [
             el('summary', { text: 'Paste JSON from LLM (fallback)' }),
-            el('p', { class: 'hint', text: 'Use this when your chat LLM produced the JSON payload but could not call the TPEN API itself. The tool will submit it using the token you authorized.' }),
-            textarea,
-            el('div', { class: 'controls' }, [submit, feedback])
-        ])
+            el('p', { class: 'hint', text: 'Use this when your chat LLM produced the JSON payload but could not call the TPEN API itself. The tool will submit it using the token you authorized.' })
+        ]
+        if (!ready) children.push(el('p', { class: 'hint', text: 'Needs a page context before submission is possible.' }))
+        children.push(textarea, el('div', { class: 'controls' }, [submit, feedback]))
+        return el('details', { class: 'fallback' }, children)
     }
 
     /**
@@ -319,8 +317,8 @@ export class UIManager {
         try {
             if (payload && typeof payload === 'object' && !Array.isArray(payload) && Array.isArray(payload.items)) {
                 for (const item of payload.items) {
-                    if (item === null || (typeof item !== 'object' && typeof item !== 'string')) {
-                        setFeedback('Each item in `items` must be an object or a string IRI.')
+                    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                        setFeedback('Each item in `items` must be an annotation object.')
                         return
                     }
                 }
@@ -342,7 +340,8 @@ export class UIManager {
                     const col = payload[i]
                     try { await postColumn(projectID, pageID, col, token) }
                     catch (err) {
-                        setFeedback(`Created ${i} of ${payload.length} columns; failed on "${col.label}" — ${err.message}`)
+                        textarea.value = JSON.stringify(payload.slice(i), null, 2)
+                        setFeedback(`Created ${i} of ${payload.length} columns; failed on "${col.label}" — ${err.message}. Remaining columns kept in the textarea for retry.`)
                         return
                     }
                 }
