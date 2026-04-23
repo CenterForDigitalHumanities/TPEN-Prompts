@@ -29,8 +29,8 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
-5. Build the `{ "items": [...] }` payload described under TPEN API — one Annotation per line with the recognized text as the `TextualBody` value and `xywh=x,y,w,h` as the fragment selector.
-6. If HTTP PUT is available, send the request once. On any non-2xx response, do not retry — fall back. If HTTP PUT is unavailable from the start, go directly to the fallback.
+5. If HTTP PUT is available, build the full payload under **TPEN API** — one Annotation per line with the recognized text and `xywh=x,y,w,h` selector — and send the request once. On any non-2xx response, do not retry — fall back.
+6. If HTTP PUT is unavailable (or step 5 fell back), emit the condensed payload under **Fallback** as the final code block.
 7. Report counts (lines saved/in payload, non-empty text, uncertain) and which path was used (direct PUT or fallback).
 8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
 
@@ -83,7 +83,17 @@ Content-Type: application/json
 
 ## Fallback
 
-When the direct PUT is impossible or returns non-2xx, emit the `{ "items": [...] }` body from TPEN API as the final code block of your report. It must be valid JSON (no comments, no placeholders — substitute the real coordinates and recognized text). The user will paste it into the TPEN splitscreen tool, which submits it with their authorized token.
+When the direct PUT is impossible or returns non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON (no comments, no placeholders — substitute the real coordinates and recognized text).
+
+```
+{
+  "items": [
+    { "text": "<recognized line text>", "target": "xywh=x,y,w,h" }
+  ]
+}
+```
+
+One item per detected line, in reading order. `target` is the bare selector value (no `#`, no `pixel:` prefix). `text` is an empty string for fully illegible lines — do not drop the item.
 
 ## Completion
 
@@ -100,4 +110,4 @@ Fallback path, report:
 - counts: lines in payload, lines with non-empty text, lines flagged uncertain
 - HTTP status and error body if a PUT was attempted first
 - notable ambiguities worth a human review
-- final code block: the full `{ "items": [...] }` JSON for the user to paste
+- final code block: the condensed `{ "items": [...] }` JSON for the user to paste

@@ -10,7 +10,7 @@
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
 import { pageEndpoint, putPage, postColumn } from './tpen-service.js'
-import { trailingId } from './iiif-ids.js'
+import { getIRI, trailingId } from './iiif-ids.js'
 
 /**
  * Build a DOM element. Recognizes a few special prop keys:
@@ -49,6 +49,60 @@ const OPTIONAL_ID_FIELDS = [
     { name: 'columnID', label: 'Column ID (optional)' },
     { name: 'lineID',   label: 'Line ID (optional)' }
 ]
+
+/**
+ * Build a W3C `SpecificResource` target from a canvas IRI and an `xywh=…`
+ * selector value.
+ * @param {string} canvasId
+ * @param {string} xywh the bare selector value (e.g. `xywh=10,20,300,40`).
+ */
+function buildSpecificResourceTarget(canvasId, xywh) {
+    return {
+        source: canvasId,
+        type: 'SpecificResource',
+        selector: {
+            type: 'FragmentSelector',
+            conformsTo: 'http://www.w3.org/TR/media-frags/',
+            value: xywh
+        }
+    }
+}
+
+/**
+ * Expand a condensed fallback item into a full W3C Annotation. Condensed items
+ * carry only the per-line differences — `target` as a bare `"xywh=x,y,w,h"`
+ * selector value, `text` as a plain string, optionally `id` for known-line
+ * updates. The fixed boilerplate (canvas source, selector type, motivation,
+ * body wrapper) is reapplied here so the prompt output stays small.
+ *
+ * For known-line updates the condensed shape carries only `id` and `text`; the
+ * existing `target` is looked up from `existingItemsById` and echoed verbatim
+ * so the services API does not wipe it on PUT.
+ *
+ * A no-op when `target` is already an object and `body` is already present —
+ * lets legacy full-shape pastes submit unchanged.
+ * @param {any} item raw parsed item from the fallback textarea.
+ * @param {string|null} canvasId the canvas IRI used as the annotation's target source.
+ * @param {Map<string, any>} existingItemsById lookup from annotation id → resolved page item.
+ * @returns {object} a W3C Annotation ready for PUT.
+ */
+function expandFallbackItem(item, canvasId, existingItemsById) {
+    const out = { ...item }
+    if (typeof item.target === 'string') {
+        out.target = buildSpecificResourceTarget(canvasId, item.target)
+    } else if (out.target === undefined && typeof item.id === 'string') {
+        const existing = existingItemsById.get(item.id)
+        if (existing?.target !== undefined) out.target = existing.target
+    }
+    if (typeof item.text === 'string') {
+        out.body = item.text === ''
+            ? []
+            : [{ type: 'TextualBody', value: item.text, format: 'text/plain' }]
+        delete out.text
+    }
+    if (!('motivation' in out)) out.motivation = 'transcribing'
+    return out
+}
 
 /**
  * Renders the three UI states (status, id form, workspace) into a single
@@ -335,12 +389,38 @@ export class UIManager {
                         setFeedback('Each item in `items` must be an annotation object.')
                         return
                     }
+                    if ('target' in item && typeof item.target !== 'string' && typeof item.target !== 'object') {
+                        setFeedback('Each item `target` must be an `xywh=…` string or a full target object.')
+                        return
+                    }
+                    if ('text' in item && typeof item.text !== 'string') {
+                        setFeedback('Each item `text` must be a string.')
+                        return
+                    }
                 }
-                // Narrow to the minimal PUT body the services API needs.
-                // Top-level keys beyond `items` would otherwise be applied to
-                // the page record by the server's property-copy loop.
-                const result = await putPage(projectID, pageID, { items: payload.items }, token)
-                const saved = payload.items.length
+                const canvasId = getIRI(this.state.canvas)
+                if (!canvasId && payload.items.some(i => typeof i.target === 'string')) {
+                    setFeedback('Canvas context missing — reload the workspace and retry.')
+                    return
+                }
+                // Index the resolved page's items by id so the expander can
+                // echo each existing line's `target` when the condensed item
+                // only carries `id` + `text` (known-line updates). Without the
+                // echo the services API would reset the line's target.
+                const existingItemsById = new Map()
+                for (const existing of this.state.page?.items ?? []) {
+                    const eid = getIRI(existing)
+                    if (eid) existingItemsById.set(eid, existing)
+                }
+                // Expand condensed items (string target, optional text) into
+                // full W3C Annotations. Legacy full-shape items pass through
+                // unchanged. Narrow to the minimal PUT body the services API
+                // needs — top-level keys beyond `items` would otherwise be
+                // applied to the page record by the server's property-copy
+                // loop.
+                const items = payload.items.map(i => expandFallbackItem(i, canvasId, existingItemsById))
+                const result = await putPage(projectID, pageID, { items }, token)
+                const saved = items.length
                 if (result && typeof result === 'object') {
                     writeTextarea(JSON.stringify(result, null, 2))
                     setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server response (with ids) is in the textarea.`, true)

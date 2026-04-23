@@ -11,7 +11,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Existing lines
 
-Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates. The body form is `body=[]` (empty), `text="<value>"` (single plain-text `TextualBody`), or `body=<JSON>` (anything else) — use it as context for what's already on the line. The fallback payload re-uses the full annotation URI verbatim as the `id` of each item; the server preserves these ids and updates only the body text.
+Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates. The body form is `body=[]` (empty), `text="<value>"` (single plain-text `TextualBody`), or `body=<JSON>` (anything else) — use it as context for what's already on the line. The fallback payload re-uses the full annotation URI verbatim as the `id` of each item; the splitscreen tool preserves the existing target server-side and updates only the body text.
 
 {{existingLines}}
 
@@ -44,7 +44,7 @@ Use only tools already available in your environment. Do not install packages, l
 - Use explicit uncertainty markers for unclear glyphs (for example `[a?]`). Do not force certainty.
 - Do not invent expansions. If an abbreviation mark is present, transcribe the mark; do not silently expand.
 - Keep line segmentation stable — one transcription string per existing line annotation.
-- If a line's crop is illegible, send an empty body (direct) or emit an empty `TextualBody` value (fallback) and report the line id as unresolved — do not fabricate text. In the fallback payload, do not drop the item.
+- If a line's crop is illegible, send an empty body (direct) or emit `"text": ""` (fallback) and report the line id as unresolved — do not fabricate text. In the fallback payload, do not drop the item.
 
 ## TPEN API
 
@@ -60,34 +60,17 @@ Content-Type: text/plain
 
 ## Fallback
 
-The fallback tool only accepts JSON, so it uses a single page-level PUT instead of per-line PATCH. When PATCH is unavailable or every attempt returned non-2xx, emit the payload below as the final code block of your report. There must be exactly one item per entry in "Existing lines", each re-using that entry's annotation URI verbatim as its `id`, preserving its `target` (the `xywh` selector shown above) unchanged, and carrying the recognized text as the `TextualBody` value (empty string for fully illegible lines). Item order must match the order of "Existing lines" — do not reorder. It must be valid JSON (no comments, no placeholders — substitute the real URIs, xywh selectors, and recognized text).
+The fallback tool only accepts JSON, so it uses a single page-level PUT instead of per-line PATCH. When PATCH is unavailable or every attempt returned non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation — preserving each line's existing target on the server — before PUTting it.
 
 ```
-PUT {{pageEndpoint}}
-Authorization: Bearer <user token, supplied by the splitscreen tool>
-Content-Type: application/json
-
 {
   "items": [
-    {
-      "id": "<annotation-uri>",
-      "body": [{ "type": "TextualBody", "value": "<recognized line text>", "format": "text/plain" }],
-      "target": {
-        "source": "{{canvasId}}",
-        "type": "SpecificResource",
-        "selector": {
-          "type": "FragmentSelector",
-          "conformsTo": "http://www.w3.org/TR/media-frags/",
-          "value": "xywh=x,y,w,h"
-        }
-      },
-      "motivation": "transcribing"
-    }
+    { "id": "<annotation-uri>", "text": "<recognized line text>" }
   ]
 }
 ```
 
-The user will paste this into the TPEN splitscreen tool, which submits it with their authorized token.
+There must be exactly one item per entry in "Existing lines", each re-using that entry's annotation URI verbatim as its `id`. Item order must match the order of "Existing lines" — do not reorder. `text` is an empty string for fully illegible lines — do not drop the item. It must be valid JSON (no comments, no placeholders).
 
 ## Completion
 
@@ -102,4 +85,4 @@ Fallback path, report:
 - path: `fallback`
 - counts: lines in payload, lines flagged illegible
 - HTTP status and error body if a PATCH was attempted first
-- final code block: the full `{ "items": [...] }` JSON for the user to paste
+- final code block: the condensed `{ "items": [...] }` JSON for the user to paste

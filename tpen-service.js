@@ -17,7 +17,7 @@ import { CONFIG } from './config.js'
  * @param {string} token JWT.
  * @returns {Promise<any>} parsed JSON body (or `null` when the response has no body).
  */
-async function authedJson(path, method, body, token) {
+async function serviceRequest(path, method, body, token) {
     if (!token) throw new Error(`Missing auth token for ${path}`)
     const init = {
         method,
@@ -50,7 +50,7 @@ async function authedJson(path, method, body, token) {
  * @returns {Promise<any>} parsed JSON body.
  */
 function authedGet(path, token) {
-    return authedJson(path, 'GET', undefined, token)
+    return serviceRequest(path, 'GET', undefined, token)
 }
 
 /**
@@ -92,7 +92,7 @@ export function fetchPageResolved(projectID, pageID, token) {
  * @returns {Promise<any>}
  */
 export function putPage(projectID, pageID, body, token) {
-    return authedJson(
+    return serviceRequest(
         `/project/${encodeURIComponent(projectID)}/page/${encodeURIComponent(pageID)}`,
         'PUT', body, token
     )
@@ -109,7 +109,7 @@ export function putPage(projectID, pageID, body, token) {
  * @returns {Promise<any>}
  */
 export function postColumn(projectID, pageID, body, token) {
-    return authedJson(
+    return serviceRequest(
         `/project/${encodeURIComponent(projectID)}/page/${encodeURIComponent(pageID)}/column`,
         'POST', body, token
     )

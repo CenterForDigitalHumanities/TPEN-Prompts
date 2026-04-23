@@ -28,8 +28,8 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
-4. Build the `{ "items": [...] }` payload described under TPEN API. Leave `body` empty — no text yet.
-5. If HTTP PUT is available, send the request once. On any non-2xx response, do not retry — fall back. If HTTP PUT is unavailable from the start, go directly to the fallback.
+4. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, do not retry — fall back.
+5. If HTTP PUT is unavailable (or step 4 fell back), emit the condensed payload under **Fallback** as the final code block.
 6. Report count and which path was used (direct PUT or fallback).
 
 ## Rules
@@ -70,7 +70,17 @@ Content-Type: application/json
 
 ## Fallback
 
-When the direct PUT is impossible or returns non-2xx, emit the `{ "items": [...] }` body from TPEN API as the final code block of your report. It must be valid JSON (no comments, no placeholders — substitute the real coordinates). The user will paste it into the TPEN splitscreen tool, which submits it with their authorized token.
+When the direct PUT is impossible or returns non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON (no comments, no placeholders — substitute the real coordinates).
+
+```
+{
+  "items": [
+    { "target": "xywh=x,y,w,h" }
+  ]
+}
+```
+
+One item per detected line, in reading order. `target` is the bare selector value (no `#`, no `pixel:` prefix). `body` is omitted because no text is produced by this task.
 
 ## Completion
 
@@ -85,4 +95,4 @@ Fallback path, report:
 - path: `fallback`
 - count: number of line annotations in the payload
 - HTTP status and error body if a PUT was attempted first
-- final code block: the full `{ "items": [...] }` JSON for the user to paste
+- final code block: the condensed `{ "items": [...] }` JSON for the user to paste

@@ -1,6 +1,6 @@
 # Task: detect columns AND lines on a TPEN3 page and save both to the page
 
-You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services (direct) or emitted as fallback JSON payloads for the user to paste.
+You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services (direct) or emitted as a fallback JSON payload for the user to paste.
 
 ## Context
 
@@ -32,9 +32,9 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
-4. Build the `{ "items": [...] }` payload described under TPEN API. The `items` array MUST be in the global reading-order sequence from step 2 — this fixes the page's canonical line order. Leave `body` empty — no text yet.
-5. If HTTP PUT and POST are available: PUT the items once, then for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The response returns `items` in submission order, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". On any non-2xx, stop and fall back for everything not yet persisted.
-6. If HTTP PUT/POST are unavailable from the start, go directly to the Fallback — emit the items payload for the user to paste. Column creation is out of scope for the fallback path.
+4. Assemble the per-line list in the global reading-order sequence from step 2 — this fixes the page's canonical line order for both paths.
+5. If HTTP PUT and POST are available: build the full payload under **TPEN API** and PUT the items once, then for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The response returns `items` in submission order, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". On any non-2xx, stop and fall back for everything not yet persisted.
+6. If HTTP PUT/POST are unavailable (or step 5 fell back), emit the condensed payload under **Fallback** as the final code block. Column creation is out of scope for the fallback path.
 7. Report counts (lines saved/in payload, columns created/in payload) and which path was used.
 
 ## Rules
@@ -92,7 +92,17 @@ Content-Type: application/json
 
 ## Fallback
 
-When the direct path is unavailable or returns non-2xx, emit only the `{ "items": [...] }` body from TPEN API as the final code block of your report, in the global reading-order sequence from step 2. It must be valid JSON. The user pastes it into the TPEN splitscreen tool, which PUTs it with their authorized token. Column creation is out of scope for this fallback.
+When the direct path is unavailable or returns non-2xx, emit the condensed payload below as the final code block of your report, in the global reading-order sequence from step 2. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON. Column creation is out of scope for this fallback.
+
+```
+{
+  "items": [
+    { "target": "xywh=x,y,w,h" }
+  ]
+}
+```
+
+One item per detected line, in the global reading-order sequence. `target` is the bare selector value (no `#`, no `pixel:` prefix). `body` is omitted because no text is produced by this task.
 
 ## Completion
 
@@ -108,5 +118,5 @@ Fallback path, report:
 - path: `fallback`
 - counts: lines in payload
 - HTTP status and error body if a request was attempted first
-- final code block: the full `{ "items": [...] }` JSON for the user to paste
+- final code block: the condensed `{ "items": [...] }` JSON for the user to paste
 - list the labels of any columns already created before the failure, so a follow-up pass can avoid duplicating them.
