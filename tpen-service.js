@@ -99,23 +99,6 @@ export function putPage(projectID, pageID, body, token) {
 }
 
 /**
- * POST a single column to a page. Body is `{ label, annotations }` where each
- * `annotations[i]` must match an existing `page.items[*].id`; the server
- * rejects duplicate labels within the page.
- * @param {string} projectID
- * @param {string} pageID
- * @param {{ label: string, annotations: Array<string> }} body
- * @param {string} token
- * @returns {Promise<any>}
- */
-export function postColumn(projectID, pageID, body, token) {
-    return serviceRequest(
-        `/project/${encodeURIComponent(projectID)}/page/${encodeURIComponent(pageID)}/column`,
-        'POST', body, token
-    )
-}
-
-/**
  * Build the page endpoint URL (page/index.js). Templates use this for PUT/PATCH
  * operations that target the page or its sub-resources (lines, columns).
  * @param {string} projectID

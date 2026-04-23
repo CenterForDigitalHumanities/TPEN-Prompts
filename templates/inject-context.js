@@ -105,8 +105,14 @@ function formatBody(body) {
     if (!Array.isArray(body) || body.length === 0) return 'body=[]'
     if (body.length === 1) {
         const only = body[0]
-        const isPlainTextual = only
-            && typeof only === 'object'
+        // Require EXACTLY {type, value, format} with the expected values so the
+        // `text=` → `[{type, value, format}]` round-trip is lossless. Any extra
+        // field (e.g. `language`, `creator`, `id`) would be silently dropped on
+        // the PUT echo and trigger a needless RERUM re-version.
+        const keys = only && typeof only === 'object' ? Object.keys(only) : []
+        const isPlainTextual =
+            keys.length === 3
+            && keys.every(k => k === 'type' || k === 'value' || k === 'format')
             && only.type === 'TextualBody'
             && typeof only.value === 'string'
             && only.format === 'text/plain'

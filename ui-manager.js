@@ -9,7 +9,7 @@
  */
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
-import { pageEndpoint, putPage, postColumn } from './tpen-service.js'
+import { pageEndpoint, putPage } from './tpen-service.js'
 import { getIRI, trailingId } from './iiif-ids.js'
 
 /**
@@ -102,6 +102,38 @@ function expandFallbackItem(item, canvasId, existingItemsById) {
     }
     if (!('motivation' in out)) out.motivation = 'transcribing'
     return out
+}
+
+/** `{ items: [...] }` page-PUT shape — the only shape any prompt fallback emits. */
+function isItemsPayload(p) {
+    return p && typeof p === 'object' && !Array.isArray(p) && Array.isArray(p.items)
+}
+
+/**
+ * Validate a pre-expansion `items` array, returning a user-facing error string
+ * or `null`. Catches the shape-erasure trap: a known-line update (string `id`)
+ * carrying neither `text` nor `body` would pass the expander and then be PUT
+ * with `body` absent, causing the services API to overwrite the existing body
+ * with `[]` on save (Line.js#saveLineToRerum: `body: this.body ?? []`).
+ * @param {Array<any>} items
+ * @returns {string|null}
+ */
+function validateItems(items) {
+    for (const item of items) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            return 'Each item in `items` must be an annotation object.'
+        }
+        if ('target' in item && typeof item.target !== 'string' && typeof item.target !== 'object') {
+            return 'Each item `target` must be an `xywh=…` string or a full target object.'
+        }
+        if ('text' in item && typeof item.text !== 'string') {
+            return 'Each item `text` must be a string.'
+        }
+        if (typeof item.id === 'string' && !('text' in item) && !('body' in item)) {
+            return `Item for ${item.id} is missing both \`text\` and \`body\` — would erase the existing transcription.`
+        }
+    }
+    return null
 }
 
 /**
@@ -315,7 +347,7 @@ export class UIManager {
         const ready = hasPage && Boolean(token)
         const textarea = el('textarea', {
             rows: 10, spellcheck: false, autocomplete: 'off',
-            placeholder: '{ "items": [ … ] }\nor\n{ "label": "Column A", "annotations": ["…"] }\nor\n[ { "label": "…", "annotations": ["…"] }, … ]',
+            placeholder: '{ "items": [ { "target": "xywh=10,20,400,30" } ] }',
             attrs: { 'aria-label': 'JSON payload to submit to TPEN' }
         })
         const submit = el('button', {
@@ -336,11 +368,8 @@ export class UIManager {
     }
 
     /**
-     * Parse the pasted JSON, classify its shape, and dispatch the matching
-     * TPEN write. Shapes accepted:
-     * - `{ items: [...] }` → `PUT page`
-     * - `{ label, annotations: [...] }` → single `POST column`
-     * - `[ { label, annotations }, ... ]` → iterate `POST column`, stop at first failure
+     * Parse the pasted JSON and submit it as a page PUT. Only one shape is
+     * accepted: `{ items: [...] }` — the shape every prompt fallback emits.
      * @param {HTMLTextAreaElement} textarea
      * @param {HTMLButtonElement} button
      * @param {HTMLElement} feedback
@@ -382,76 +411,13 @@ export class UIManager {
 
         button.disabled = true
         setFeedback('Submitting…')
+        const opts = { projectID, pageID, token, setFeedback, writeTextarea }
         try {
-            if (payload && typeof payload === 'object' && !Array.isArray(payload) && Array.isArray(payload.items)) {
-                for (const item of payload.items) {
-                    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-                        setFeedback('Each item in `items` must be an annotation object.')
-                        return
-                    }
-                    if ('target' in item && typeof item.target !== 'string' && typeof item.target !== 'object') {
-                        setFeedback('Each item `target` must be an `xywh=…` string or a full target object.')
-                        return
-                    }
-                    if ('text' in item && typeof item.text !== 'string') {
-                        setFeedback('Each item `text` must be a string.')
-                        return
-                    }
-                }
-                const canvasId = getIRI(this.state.canvas)
-                if (!canvasId && payload.items.some(i => typeof i.target === 'string')) {
-                    setFeedback('Canvas context missing — reload the workspace and retry.')
-                    return
-                }
-                // Index the resolved page's items by id so the expander can
-                // echo each existing line's `target` when the condensed item
-                // only carries `id` + `text` (known-line updates). Without the
-                // echo the services API would reset the line's target.
-                const existingItemsById = new Map()
-                for (const existing of this.state.page?.items ?? []) {
-                    const eid = getIRI(existing)
-                    if (eid) existingItemsById.set(eid, existing)
-                }
-                // Expand condensed items (string target, optional text) into
-                // full W3C Annotations. Legacy full-shape items pass through
-                // unchanged. Narrow to the minimal PUT body the services API
-                // needs — top-level keys beyond `items` would otherwise be
-                // applied to the page record by the server's property-copy
-                // loop.
-                const items = payload.items.map(i => expandFallbackItem(i, canvasId, existingItemsById))
-                const result = await putPage(projectID, pageID, { items }, token)
-                const saved = items.length
-                if (result && typeof result === 'object') {
-                    writeTextarea(JSON.stringify(result, null, 2))
-                    setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server response (with ids) is in the textarea.`, true)
-                } else {
-                    setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server returned no body; pasted payload left in the textarea.`, true)
-                }
+            if (isItemsPayload(payload)) {
+                await this.#submitItems(payload.items, opts)
                 return
             }
-            if (payload && typeof payload === 'object' && !Array.isArray(payload)
-                && typeof payload.label === 'string' && Array.isArray(payload.annotations)) {
-                await postColumn(projectID, pageID, payload, token)
-                setFeedback(`Created column "${payload.label}".`, true)
-                writeTextarea('')
-                return
-            }
-            if (Array.isArray(payload) && payload.every(c =>
-                c && typeof c === 'object' && typeof c.label === 'string' && Array.isArray(c.annotations))) {
-                for (let i = 0; i < payload.length; i++) {
-                    const col = payload[i]
-                    try { await postColumn(projectID, pageID, col, token) }
-                    catch (err) {
-                        writeTextarea(JSON.stringify(payload.slice(i), null, 2))
-                        setFeedback(`Created ${i} of ${payload.length} columns; failed on "${col.label}" — ${err.message}. Remaining columns kept in the textarea for retry.`)
-                        return
-                    }
-                }
-                setFeedback(`Created ${payload.length} column${payload.length === 1 ? '' : 's'}.`, true)
-                writeTextarea('')
-                return
-            }
-            setFeedback('Unrecognized payload shape — expected `{items: [...]}`, `{label, annotations}`, or an array of `{label, annotations}`.')
+            setFeedback('Unrecognized payload shape — expected `{ "items": [...] }`.')
         } catch (err) {
             const status = err?.status ? `TPEN API ${err.status}: ` : ''
             setFeedback(`${status}${err?.message ?? 'Submission failed.'}`)
@@ -459,6 +425,42 @@ export class UIManager {
             if (button.isConnected) {
                 button.disabled = !(this.state.projectID && this.state.pageID && this.state.token)
             }
+        }
+    }
+
+    /**
+     * Validate, expand, and PUT an `items` payload. Narrows the PUT body to
+     * just `{ items }` — top-level keys beyond `items` would otherwise be
+     * applied to the page record by the server's property-copy loop.
+     * @param {Array<any>} items
+     * @param {{projectID:string,pageID:string,token:string,setFeedback:Function,writeTextarea:Function}} opts
+     */
+    async #submitItems(items, { projectID, pageID, token, setFeedback, writeTextarea }) {
+        const validationError = validateItems(items)
+        if (validationError) { setFeedback(validationError); return }
+        const canvasId = getIRI(this.state.canvas)
+        if (!canvasId && items.some(i => typeof i.target === 'string')) {
+            setFeedback('Canvas context missing — reload the workspace and retry.')
+            return
+        }
+        // Index the resolved page's items by id so the expander can echo each
+        // existing line's `target` when the condensed item only carries `id` +
+        // `text` (known-line updates). Without the echo the services API would
+        // reset the line's target.
+        const existingItemsById = new Map()
+        for (const existing of this.state.page?.items ?? []) {
+            const eid = getIRI(existing)
+            if (eid) existingItemsById.set(eid, existing)
+        }
+        const expanded = items.map(i => expandFallbackItem(i, canvasId, existingItemsById))
+        const result = await putPage(projectID, pageID, { items: expanded }, token)
+        const saved = expanded.length
+        const noun = `line item${saved === 1 ? '' : 's'}`
+        if (result && typeof result === 'object') {
+            writeTextarea(JSON.stringify(result, null, 2))
+            setFeedback(`Saved ${saved} ${noun}. Server response (with ids) is in the textarea.`, true)
+        } else {
+            setFeedback(`Saved ${saved} ${noun}. Server returned no body; pasted payload left in the textarea.`, true)
         }
     }
 
