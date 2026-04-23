@@ -34,7 +34,7 @@ async function serviceRequest(path, method, body, token) {
         // utilities/shared.js#respondWithError and utilities/routeErrorHandler.js).
         const detail = await res.json().catch(() => ({}))
         const msg = detail.message ?? detail.error ?? res.statusText
-        const err = new Error(`${res.status} ${path}: ${msg}`)
+        const err = new Error(`${path}: ${msg}`)
         err.status = res.status
         throw err
     }

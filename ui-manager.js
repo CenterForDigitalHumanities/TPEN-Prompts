@@ -69,18 +69,49 @@ function buildSpecificResourceTarget(canvasId, xywh) {
 }
 
 /**
- * Expand a condensed fallback item into a full W3C Annotation. Condensed items
- * carry only the per-line differences — `target` as a bare `"xywh=x,y,w,h"`
- * selector value, `text` as a plain string, optionally `id` for known-line
- * updates. The fixed boilerplate (canvas source, selector type, motivation,
- * body wrapper) is reapplied here so the prompt output stays small.
+ * Pull the bare `xywh=…` selector value out of whatever target shape the
+ * fallback item carries.
  *
- * For known-line updates the condensed shape carries only `id` and `text`; the
- * existing `target` is looked up from `existingItemsById` and echoed verbatim
- * so the services API does not wipe it on PUT.
+ * - Bare string (condensed shape) → the string itself.
+ * - Object `SpecificResource` (legacy full-shape paste) → `selector.value`.
+ * - Absent; known-line update (`{id, text}`) → look up the existing line's
+ *   target on the hydrated page and extract its selector value.
  *
- * A no-op when `target` is already an object and `body` is already present —
- * lets legacy full-shape pastes submit unchanged.
+ * Everything else returns `null`; the caller leaves `target` off and the
+ * services API rejects the item with `Line data is malformed` — the same
+ * outcome as submitting before the refactor.
+ * @param {any} item
+ * @param {Map<string, any>} existingItemsById
+ * @returns {string|null}
+ */
+function resolveXywh(item, existingItemsById) {
+    if (typeof item.target === 'string') return item.target
+    if (item.target && typeof item.target === 'object') {
+        return typeof item.target.selector?.value === 'string' ? item.target.selector.value : null
+    }
+    if (typeof item.id === 'string') {
+        const existing = existingItemsById.get(item.id)
+        const value = existing?.target?.selector?.value
+        return typeof value === 'string' ? value : null
+    }
+    return null
+}
+
+/**
+ * Expand a condensed fallback item into a full W3C Annotation. Every output
+ * target is rebuilt fresh with `canvasId` as `source` — we don't trust any
+ * source that rode in on a pasted item or an echoed existing target, so the
+ * rebuilt annotation always points at the canvas the UI is showing.
+ *
+ * The condensed per-item shapes are (by prompt):
+ *
+ * - `{ target: "xywh=…" }` — detection only.
+ * - `{ target: "xywh=…", text }` — detection + transcription.
+ * - `{ id, text }` — known-line update; xywh is looked up from the hydrated
+ *   page.
+ *
+ * Legacy full-shape pastes pass through in all other respects — only
+ * `target.source` gets normalized and `motivation` is filled when missing.
  * @param {any} item raw parsed item from the fallback textarea.
  * @param {string|null} canvasId the canvas IRI used as the annotation's target source.
  * @param {Map<string, any>} existingItemsById lookup from annotation id → resolved page item.
@@ -88,12 +119,8 @@ function buildSpecificResourceTarget(canvasId, xywh) {
  */
 function expandFallbackItem(item, canvasId, existingItemsById) {
     const out = { ...item }
-    if (typeof item.target === 'string') {
-        out.target = buildSpecificResourceTarget(canvasId, item.target)
-    } else if (out.target === undefined && typeof item.id === 'string') {
-        const existing = existingItemsById.get(item.id)
-        if (existing?.target !== undefined) out.target = existing.target
-    }
+    const xywh = resolveXywh(item, existingItemsById)
+    if (xywh) out.target = buildSpecificResourceTarget(canvasId, xywh)
     if (typeof item.text === 'string') {
         out.body = item.text === ''
             ? []
@@ -448,14 +475,14 @@ export class UIManager {
         const validationError = validateItems(items)
         if (validationError) { setFeedback(validationError); return }
         const canvasId = getIRI(this.state.canvas)
-        if (!canvasId && items.some(i => typeof i.target === 'string')) {
+        if (!canvasId) {
             setFeedback('Canvas context missing — reload the workspace and retry.')
             return
         }
-        // Index the resolved page's items by id so the expander can echo each
-        // existing line's `target` when the condensed item only carries `id` +
-        // `text` (known-line updates). Without the echo the services API would
-        // reset the line's target.
+        // Index the resolved page's items by id so the expander can recover
+        // each existing line's xywh for known-line updates (`{id, text}` only).
+        // The rebuilt target still uses `canvasId` as `source`; only the xywh
+        // selector value is pulled from the hydrated item.
         const existingItemsById = new Map()
         for (const existing of this.state.page?.items ?? []) {
             const eid = getIRI(existing)
@@ -541,9 +568,6 @@ export class UIManager {
         try {
             const full = renderTemplate(select.value, {
                 project: s.project, page: s.page, canvas: s.canvas,
-                layer: s.layer, column: s.column, line: s.line,
-                projectID: s.projectID, pageID: s.pageID,
-                layerID: s.layerID, columnID: s.columnID, lineID: s.lineID,
                 token: s.token,
                 pageEndpoint: (s.projectID && s.pageID) ? pageEndpoint(s.projectID, s.pageID) : null
             })

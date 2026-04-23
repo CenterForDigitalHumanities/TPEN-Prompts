@@ -16,7 +16,7 @@ export const detectColumnsTemplate = {
     templateUrl: new URL('./PROMPT.md', import.meta.url),
     buildContext: (ctx) => ({
         ...buildTemplateContext(ctx),
-        existingColumns: formatExistingColumns(ctx.project, ctx.pageID, ctx.page),
+        existingColumns: formatExistingColumns(ctx.project, ctx.page),
         existingLines: formatExistingLines(ctx.page)
     })
 }

@@ -33,8 +33,8 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. Assemble the per-line list in the global reading-order sequence from step 2 — this fixes the page's canonical line order for both paths.
-5. If HTTP PUT and POST are available: build the full payload under **TPEN API** and PUT the items once, then for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The response returns `items` in submission order, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". On any non-2xx, stop and fall back for everything not yet persisted.
-6. If HTTP PUT/POST are unavailable (or step 5 fell back), emit the condensed payload under **Fallback** as the final code block. Column creation is out of scope for the fallback path.
+5. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once. If the PUT returns non-2xx, stop and fall back — lines are not persisted yet. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The response returns `items` in submission order, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
+6. If HTTP PUT is unavailable (or the PUT in step 5 failed), emit the condensed payload under **Fallback** as the final code block. Column creation is out of scope for the fallback path.
 7. Report counts (lines saved/in payload, columns created/in payload) and which path was used.
 
 ## Rules

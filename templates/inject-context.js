@@ -150,19 +150,19 @@ export function formatExistingLines(fetchedPage) {
 /**
  * Render the current column state for a given page as a markdown bullet list.
  * Used by templates that must avoid duplicate column labels. The directly
- * fetched `page` is authoritative when supplied, since the project graph may
- * not hydrate `layer.pages[].columns` for every page.
+ * fetched `page` is authoritative, since the project graph may not hydrate
+ * `layer.pages[].columns` for every page; the project tree is consulted as a
+ * fallback.
  * @param {any} project the TPEN project object.
- * @param {string|null|undefined} pageID the short page id or full page IRI.
- * @param {any} [fetchedPage] the page object returned by `fetchPageResolved`, preferred when available.
+ * @param {any} page the page object returned by `fetchPageResolved`.
  * @returns {string}
  */
-export function formatExistingColumns(project, pageID, fetchedPage = null) {
-    const tail = trailingId(pageID)
+export function formatExistingColumns(project, page) {
+    const tail = trailingId(page)
     const projectPage = (project?.layers ?? [])
         .flatMap(l => l.pages ?? [])
         .find(pg => trailingId(pg) === tail)
-    const cols = fetchedPage?.columns ?? projectPage?.columns ?? []
+    const cols = page?.columns ?? projectPage?.columns ?? []
     if (!Array.isArray(cols) || cols.length === 0) {
         return '- (No existing columns on this page — labels must be unique when created.)'
     }
