@@ -60,7 +60,7 @@ Content-Type: text/plain
 
 ## Fallback
 
-The fallback tool only accepts JSON, so it uses a single page-level PUT instead of per-line PATCH. When PATCH is unavailable or every attempt returned non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation — preserving each line's existing target on the server — before PUTting it.
+The fallback tool only accepts JSON, so it uses a single page-level PUT instead of per-line PATCH. When PATCH is unavailable or every attempt returned non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool re-uses each line's existing target from the hydrated page context before PUTting it — the item's `id` must match an entry in "Existing lines" above.
 
 ```
 {

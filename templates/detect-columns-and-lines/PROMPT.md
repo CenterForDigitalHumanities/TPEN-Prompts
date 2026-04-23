@@ -18,7 +18,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
 1. Ability to fetch the image bytes (or a derivative) and identify line and column bounds from them. Precise pixel measurement is preferred when available; visual estimation from the fetched image is acceptable otherwise.
-2. Either HTTP PUT and POST capability with `Content-Type: application/json`, or the ability to emit the payloads as fallback JSON code blocks in your report. If either verb is unavailable, skip straight to the Fallback section — do not retry.
+2. Either HTTP PUT and POST capability with `Content-Type: application/json`, or the ability to emit the lines-only payload as a fallback JSON code block in your report. Column creation has no fallback — if POST is unavailable, column grouping is dropped. If PUT is unavailable, skip straight to the Fallback section — do not retry.
 
 Use only tools already available in your environment. Do not install packages, libraries, or system utilities.
 
@@ -48,6 +48,7 @@ Use only tools already available in your environment. Do not install packages, l
 - Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
 - Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
 - Completion beats refusal: approximate bounds on most lines are more useful than nothing — this data will be reviewed and corrected downstream.
+- Zero lines detected is an unprocessable outcome. Stop and report — do not PUT, do not POST a column, do not emit a fallback payload. An empty `items` array would erase every existing annotation on the page.
 
 ## TPEN API
 

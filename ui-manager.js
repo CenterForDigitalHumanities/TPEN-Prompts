@@ -111,14 +111,23 @@ function isItemsPayload(p) {
 
 /**
  * Validate a pre-expansion `items` array, returning a user-facing error string
- * or `null`. Catches the shape-erasure trap: a known-line update (string `id`)
- * carrying neither `text` nor `body` would pass the expander and then be PUT
- * with `body` absent, causing the services API to overwrite the existing body
- * with `[]` on save (Line.js#saveLineToRerum: `body: this.body ?? []`).
+ * or `null`. Catches two erasure traps:
+ *
+ * 1. An empty array — the services PUT handler's top-level copy loop writes
+ *    `page.items = []` even when `itemsProvided` is false, erasing every line
+ *    reference on the page and leaving columns pointing at stale ids. Prompts
+ *    should stop and report "no lines" rather than emit an empty payload.
+ * 2. A known-line update (string `id`) carrying neither `text` nor `body`
+ *    would pass the expander and then be PUT with `body` absent, causing the
+ *    services API to overwrite the existing body with `[]` on save
+ *    (Line.js#saveLineToRerum: `body: this.body ?? []`).
  * @param {Array<any>} items
  * @returns {string|null}
  */
 function validateItems(items) {
+    if (items.length === 0) {
+        return '`items` is empty — submitting would erase every line on the page. Regenerate the prompt response with at least one detected line or stop.'
+    }
     for (const item of items) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
             return 'Each item in `items` must be an annotation object.'
