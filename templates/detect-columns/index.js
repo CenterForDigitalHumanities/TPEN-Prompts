@@ -1,8 +1,8 @@
 /**
- * @file Template: "Detect columns → POST column".
- *
- * Targets workflow #2 from the absorbed cubap `_tools/COMMON_TASKS.md`:
- * Column Detection.
+ * @file Template: "Detect columns → clear-columns DELETE, then POST column per
+ * detected column, then PUT page to reorder lines (if needed)". Operates on
+ * an existing line set; no fallback — fails and reports if image analysis or
+ * any of the three HTTP verbs are unavailable.
  *
  * @author thehabes
  */

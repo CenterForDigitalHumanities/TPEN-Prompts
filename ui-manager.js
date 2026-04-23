@@ -247,12 +247,12 @@ export class UIManager {
     }
 
     /**
-     * Build the paste-JSON fallback panel. The submit button requires
-     * `projectID`, `pageID`, AND `token` — `renderWorkspace` still draws the
-     * body (minus generate/copy) when the token is absent and shows an auth
-     * button, so the panel cannot rely on a workspace-level token gate.
-     * `updateToken` flips the submit-disabled state when the token arrives
-     * after the panel was built.
+     * Build the paste-JSON fallback panel. Submit requires `projectID`,
+     * `pageID`, AND `token`. The workspace body is hidden when no token is
+     * held (`renderWorkspace` sets `hidden: !token`), so the disabled state
+     * below is belt-and-suspenders against a stale reference being clicked
+     * programmatically. `updateToken` still flips it when the token arrives
+     * after the panel was built so the pageID gate remains authoritative.
      * @returns {HTMLElement}
      */
     #buildFallbackPanel() {
@@ -273,8 +273,8 @@ export class UIManager {
         const feedback = el('span', { class: 'feedback', attrs: { 'aria-live': 'polite' } })
         submit.addEventListener('click', () => this.#onFallbackSubmit(textarea, submit, feedback))
         const children = [
-            el('summary', { text: 'Paste JSON from LLM (fallback)' }),
-            el('p', { class: 'hint', text: 'Use this when your chat LLM produced the JSON payload but could not call the TPEN API itself. The tool will submit it using the token you authorized.' })
+            el('summary', { text: `Couldn't Use the API? Paste JSON from LLM here` }),
+            el('p', { class: 'hint', text: 'Use this when your chat LLM produced the JSON payload but could not call the TPEN API itself. This tool will submit it using the token you authorized.' })
         ]
         if (!hasPage) children.push(el('p', { class: 'hint', text: 'Needs a page context before submission is possible.' }))
         children.push(textarea, el('div', { class: 'controls' }, [submit, feedback]))

@@ -34,9 +34,9 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
-4. Build the `{ "items": [...] }` payload described under TPEN API. The `items` array MUST be in the global reading-order sequence from step 2 — this fixes the page's canonical line order. Leave `body` empty — no text yet. Track each line's column index (0-based) as you emit items so you can slice them into columns in step 5.
-5. If HTTP PUT and POST are available: PUT the items once, then for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of server-returned ids for that column. Labels must be unique and must not clash with anything in "Existing columns on this page". On any non-2xx, stop and fall back for everything not yet persisted.
-6. If HTTP PUT/POST are unavailable from the start, go directly to the Fallback — emit the items payload for the user to paste. Column creation in fallback requires a follow-up pass (see Fallback).
+4. Build the `{ "items": [...] }` payload described under TPEN API. The `items` array MUST be in the global reading-order sequence from step 2 — this fixes the page's canonical line order. Leave `body` empty — no text yet.
+5. If HTTP PUT and POST are available: PUT the items once, then for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The response returns `items` in submission order, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". On any non-2xx, stop and fall back for everything not yet persisted.
+6. If HTTP PUT/POST are unavailable from the start, go directly to the Fallback — emit the items payload for the user to paste. Column creation is out of scope for the fallback path.
 7. Report counts (lines saved/in payload, columns created/in payload) and which path was used.
 
 ## Rules
@@ -94,7 +94,7 @@ Content-Type: application/json
 
 ## Fallback
 
-When the direct path is unavailable or returns non-2xx, emit only the `{ "items": [...] }` body from TPEN API as the final code block of your report, in the global reading-order sequence from step 2. It must be valid JSON. The user pastes it into the TPEN splitscreen tool, which PUTs it with their authorized token and fills the textarea with the server response (the persisted lines, each with its assigned id). Column creation in fallback is a separate pass — instruct the user to re-run with the `detect-columns` template, which takes the now-persisted lines and emits the `[{label, annotations}, ...]` column payload.
+When the direct path is unavailable or returns non-2xx, emit only the `{ "items": [...] }` body from TPEN API as the final code block of your report, in the global reading-order sequence from step 2. It must be valid JSON. The user pastes it into the TPEN splitscreen tool, which PUTs it with their authorized token. Column creation is out of scope for this fallback.
 
 ## Completion
 
@@ -108,7 +108,7 @@ Direct path, report:
 Fallback path, report:
 
 - path: `fallback`
-- counts: lines in payload, columns not yet created
+- counts: lines in payload
 - HTTP status and error body if a request was attempted first
 - final code block: the full `{ "items": [...] }` JSON for the user to paste
-- next step: re-run with `detect-columns` after the items paste succeeds, to create the columns. If any columns were already created before the failure (list their labels in the report), the follow-up run must avoid duplicating those labels — `detect-columns` receives the "Existing columns on this page" list and will honour it.
+- list the labels of any columns already created before the failure, so a follow-up pass can avoid duplicating them.
