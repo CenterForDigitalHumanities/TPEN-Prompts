@@ -67,8 +67,6 @@ Content-Type: application/json
 {
   "items": [
     {
-      "type": "Annotation",
-      "@context": "http://www.w3.org/ns/anno.jsonld",
       "body": [{ "type": "TextualBody", "value": "<recognized line text>", "format": "text/plain" }],
       "target": {
         "source": "{{canvasId}}",

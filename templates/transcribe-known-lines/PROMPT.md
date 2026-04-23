@@ -13,7 +13,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Existing lines
 
-Each entry is `<annotation-uri>: <xywh selector>` in canvas coordinates. The fallback payload re-uses the full annotation URI verbatim as the `id` of each item; the server preserves these ids and updates only the body text.
+Each entry is `<annotation-uri> | xywh=<xywh selector> | body=<body JSON>` in canvas coordinates. The fallback payload re-uses the full annotation URI verbatim as the `id` of each item; the server preserves these ids and updates only the body text.
 
 {{existingLines}}
 
@@ -73,8 +73,6 @@ Content-Type: application/json
   "items": [
     {
       "id": "<annotation-uri>",
-      "type": "Annotation",
-      "@context": "http://www.w3.org/ns/anno.jsonld",
       "body": [{ "type": "TextualBody", "value": "<recognized line text>", "format": "text/plain" }],
       "target": {
         "source": "{{canvasId}}",

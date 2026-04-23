@@ -41,13 +41,12 @@ function canvasDimensions(canvas) {
  * @returns {Record<string, string>}
  */
 export function buildTemplateContext(ctx) {
-    const { canvas, project, page, projectID, pageID, projectEndpoint, pageEndpoint, token } = ctx
+    const { canvas, page, projectID, pageID, pageEndpoint, token } = ctx
     const canvasId = getIRI(canvas) ?? '(unknown canvas id)'
     const imageUrl = extractImageUrl(canvas) ?? '(no image body found on canvas)'
     const { width, height } = canvasDimensions(canvas)
     const canvasWidth = width != null ? String(width) : '(unknown)'
     const canvasHeight = height != null ? String(height) : '(unknown)'
-    const dims = (width && height) ? `${width} × ${height}` : 'unknown (use the IIIF Image API info.json)'
     const lineCount = Array.isArray(page?.items) ? page.items.length : 0
     return {
         projectID: projectID ?? '',
@@ -56,9 +55,7 @@ export function buildTemplateContext(ctx) {
         imageUrl,
         canvasWidth,
         canvasHeight,
-        dims,
         lineCount: String(lineCount),
-        projectEndpoint: projectEndpoint ?? '(unknown project endpoint)',
         pageEndpoint: pageEndpoint ?? '(unknown page endpoint)',
         token: token ?? ''
     }
@@ -87,10 +84,15 @@ function extractXywh(item) {
 
 /**
  * Render the current line annotations on a page as a markdown bullet list
- * keyed by full annotation URI and xywh selector. Pre-resolving this list in
- * the parent saves the LLM a GET + parse round trip. Column POSTs require the
- * full URI to match `page.items[].id` server-side; PATCH-line-text consumers
- * can split the URI's trailing segment themselves.
+ * carrying the fields needed to echo each line back in a page PUT without
+ * losing data. Pre-resolving this list in the parent saves the LLM a GET +
+ * parse round trip. Column POSTs require the full URI to match
+ * `page.items[].id` server-side; PATCH-line-text consumers can split the
+ * URI's trailing segment themselves.
+ *
+ * Body is included verbatim (as compact JSON) because the services API
+ * replaces `body` with `[]` if the PUT item omits it — echoing the existing
+ * body prevents accidental transcription wipes.
  * @param {any} fetchedPage the page object returned by `fetchPageResolved`.
  * @returns {string}
  */
@@ -102,7 +104,8 @@ export function formatExistingLines(fetchedPage) {
     return items.map(item => {
         const lineUri = getIRI(item) ?? '(unknown)'
         const xywh = extractXywh(item) ?? '(no xywh selector)'
-        return `- ${lineUri}: ${xywh}`
+        const body = JSON.stringify(item?.body ?? [])
+        return `- ${lineUri} | xywh=${xywh} | body=${body}`
     }).join('\n')
 }
 

@@ -54,8 +54,6 @@ Content-Type: application/json
 {
   "items": [
     {
-      "type": "Annotation",
-      "@context": "http://www.w3.org/ns/anno.jsonld",
       "body": [],
       "target": {
         "source": "{{canvasId}}",

@@ -9,7 +9,7 @@
  */
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
-import { pageEndpoint, projectEndpoint, putPage, postColumn } from './tpen-service.js'
+import { pageEndpoint, putPage, postColumn } from './tpen-service.js'
 import { trailingId } from './iiif-ids.js'
 
 /**
@@ -210,10 +210,10 @@ export class UIManager {
             select.append(el('option', { value: t.id, text: t.label }))
         }
 
-        // Prompts embed the auth token; generating before consent yields an
-        // unusable prompt (templates render "(unable to resolve agent IRI…)").
-        // Gate Generate on token presence and nudge the user toward the consent
-        // button in the header.
+        // Prompts embed the auth token in `{{token}}`; generating before
+        // consent yields a prompt whose Authorization header is `Bearer ` with
+        // nothing after it. Gate Generate on token presence and nudge the user
+        // toward the consent button in the header.
         const generateBtn = el('button', {
             type: 'button', id: 'generate-btn', text: 'Generate prompt',
             disabled: !token
@@ -329,7 +329,10 @@ export class UIManager {
                         return
                     }
                 }
-                const result = await putPage(projectID, pageID, payload, token)
+                // Narrow to the minimal PUT body the services API needs.
+                // Top-level keys beyond `items` would otherwise be applied to
+                // the page record by the server's property-copy loop.
+                const result = await putPage(projectID, pageID, { items: payload.items }, token)
                 const saved = payload.items.length
                 if (result && typeof result === 'object') {
                     textarea.value = JSON.stringify(result, null, 2)
@@ -442,7 +445,6 @@ export class UIManager {
                 projectID: s.projectID, pageID: s.pageID,
                 layerID: s.layerID, columnID: s.columnID, lineID: s.lineID,
                 token: s.token,
-                projectEndpoint: s.projectID ? projectEndpoint(s.projectID) : null,
                 pageEndpoint: (s.projectID && s.pageID) ? pageEndpoint(s.projectID, s.pageID) : null
             })
             this.#fullPrompt = full

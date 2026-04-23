@@ -109,16 +109,6 @@ export function postColumn(projectID, pageID, body, token) {
 }
 
 /**
- * Build the project endpoint URL (project/index.js). Templates use this for
- * best-effort GETs that verify project-level state mid-task.
- * @param {string} projectID
- * @returns {string} absolute URL.
- */
-export function projectEndpoint(projectID) {
-    return `${CONFIG.servicesURL}/project/${encodeURIComponent(projectID)}`
-}
-
-/**
  * Build the page endpoint URL (page/index.js). Templates use this for PUT/PATCH
  * operations that target the page or its sub-resources (lines, columns).
  * @param {string} projectID
