@@ -1,6 +1,6 @@
 # Task: detect column regions on a TPEN3 page and assign existing lines to them
 
-You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services.
+You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services (direct) or emitted as fallback JSON payloads for the user to paste.
 
 ## Context
 
@@ -27,12 +27,10 @@ All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`,
 
 You must have:
 
-1. Programmatic pixel access to the full-resolution image — a numeric pixel buffer you can iterate over. A prose description of the image, or any measurement taken from a rendered or previewed image, does not qualify; previews are downsampled and visually estimated bounds will be wrong. **If you cannot obtain pixel data with the capabilities already available to you, stop now and return a failure report naming the missing capability.**
-2. HTTP PUT and POST capability with `Content-Type: application/json`.
+1. Programmatic pixel access to the full-resolution image — a numeric pixel buffer you can iterate over. A prose description of the image, or any measurement taken from a rendered or previewed image, does not qualify; previews are downsampled and visually estimated bounds will be wrong. **If you cannot obtain pixel data with the capabilities already available to you, stop now and return a failure report naming the missing capability.** This precondition is hard — fallback does not rescue missing vision.
+2. Either HTTP PUT and POST capability with `Content-Type: application/json`, or the ability to emit the payloads as fallback JSON code blocks in your report. If either verb is unavailable, skip straight to the Fallback section — do not retry.
 
-Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is missing, stop and return a failure report naming it rather than installing anything.
-
-If any precondition fails, stop and return a concise failure report.
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities.
 
 ## Steps
 
@@ -45,9 +43,11 @@ If any precondition fails, stop and return a concise failure report.
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. For each detected column, determine which of the existing line ids (from the list above) belong to it. Assign a line to the column whose canvas-space region contains the center point of the line's `xywh`. If a line's center falls outside every detected column, assign it to the nearest column by Euclidean distance from the center point to the column's region (distance `0` when the point is inside). Each line belongs to exactly one column.
-5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center. Then PUT the page with `items` in that order so the page's canonical line list matches reading order (see TPEN API below). Each `items` entry re-uses the existing annotation URI verbatim as its `id` — the server preserves ids (and any already-attached body text) rather than minting new ones.
-6. For each column, POST `{ label, annotations }` to the column endpoint. `annotations` is the contiguous slice of the reading-order id sequence that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any label under "Existing columns on this page".
-7. Report the count of created columns and any per-column failures.
+5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center.
+6. Build the `{ "items": [...] }` payload described under TPEN API from that sequence. Each `items` entry re-uses the existing annotation URI verbatim as its `id` — the server preserves ids (and any already-attached body text) rather than minting new ones.
+7. Build the column payload `[{ label, annotations }, ...]` where each `annotations` array is the contiguous slice of the reading-order id sequence that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any label under "Existing columns on this page". Both the direct and fallback paths use the same ids — the existing annotation URIs listed above — so the same column payload works in either path.
+8. If HTTP PUT and POST are available: PUT the page once, then POST each column once. On any non-2xx, stop and fall back for whatever has not yet persisted. Otherwise go directly to the Fallback.
+9. Report counts (columns created or in payload) and which path was used.
 
 ## Rules
 
@@ -105,19 +105,27 @@ Content-Type: application/json
 
 Each `<annotation-uri>` is the full id of a line annotation listed above, used verbatim.
 
-On any non-2xx response, stop the operation in progress and include the HTTP status and response body in the failure report.
+## Fallback
+
+When the direct path is unavailable or returns non-2xx, emit two final code blocks in your report, in order:
+
+1. The `{ "items": [...] }` body from TPEN API — the reading-order reorder of existing lines.
+2. The `[{ "label": "…", "annotations": [ "<annotation-uri>", … ] }, …]` column array — one entry per detected column, annotations drawn verbatim from "Existing lines".
+
+Both must be valid JSON. The user pastes each block into the TPEN splitscreen tool; the tool PUTs the first block with their authorized token, then POSTs each column from the second block in one paste.
 
 ## Completion
 
-On success, report:
+Direct path, report:
 
 - operations: `PUT page`, `POST column` (×N)
 - target: {{pageEndpoint}} (page) and `{{pageEndpoint}}/column`
 - count: number of columns created
 - per-column line counts
 
-On failure, report:
+Fallback path, report:
 
-- the failing stage (image fetch, detection, PUT, or a specific POST)
-- HTTP status and error body
-- recommended next step (e.g., choose a different label, reassign lines)
+- path: `fallback`
+- counts: columns in payload, per-column line counts
+- HTTP status and error body if a request was attempted first
+- final code blocks (in order): the `{ "items": [...] }` JSON, then the `[{label, annotations}, ...]` column JSON, for the user to paste

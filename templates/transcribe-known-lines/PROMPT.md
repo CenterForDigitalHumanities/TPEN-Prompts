@@ -1,6 +1,6 @@
 # Task: transcribe the existing lines on a TPEN3 page
 
-You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services.
+You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services (direct) or emitted as a fallback JSON payload for the user to paste.
 
 ## Context
 
@@ -13,7 +13,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Existing lines
 
-Each entry is `<annotation-uri>: <xywh selector>` in canvas coordinates.
+Each entry is `<annotation-uri>: <xywh selector>` in canvas coordinates. Use the full annotation URI verbatim as the `id` of each item in the PUT payload; the server preserves these ids and updates only the body text.
 
 {{existingLines}}
 
@@ -23,12 +23,10 @@ All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`,
 
 You must have:
 
-1. Vision capability: fetch each line's region as image bytes (e.g. via a IIIF region URL) and read the inked glyphs directly. A fetcher that returns only a prose description of the image does not qualify, and any preview rendered back into chat is downsampled — do not transcribe from a preview. **If you cannot read image bytes directly with the capabilities already available to you, stop now and return a failure report naming the missing capability.**
-2. HTTP PATCH capability (with `Content-Type: text/plain`).
+1. Vision capability: fetch each line's region as image bytes (e.g. via a IIIF region URL) and read the inked glyphs directly. A fetcher that returns only a prose description of the image does not qualify, and any preview rendered back into chat is downsampled — do not transcribe from a preview. **If you cannot read image bytes directly with the capabilities already available to you, stop now and return a failure report naming the missing capability.** This precondition is hard — fallback does not rescue missing vision.
+2. Either HTTP PUT capability with `Content-Type: application/json`, or the ability to emit the payload as a fallback JSON code block in your report. If HTTP PUT is not available, skip straight to the Fallback section — do not retry.
 
-Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is missing, stop and return a failure report naming it rather than installing anything.
-
-If any precondition fails, stop and return a concise failure report naming the missing capability.
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities.
 
 ## Steps
 
@@ -39,8 +37,9 @@ If any precondition fails, stop and return a concise failure report naming the m
    - `pixel_h = round(canvas_h * img_h / {{canvasHeight}})`
    Crop each line region and verify it visibly contains a single line of inked text.
 2. Run handwriting text recognition over each crop. Apply the recognition rules below.
-3. For each line, PATCH the text to its line-text endpoint — one PATCH per line in the "Existing lines" list.
-4. Report a per-line summary: how many succeeded, how many failed, and the HTTP status for any failure.
+3. Build the `{ "items": [...] }` payload described under TPEN API. There is exactly one item per entry in "Existing lines", each item re-using that entry's annotation URI verbatim as its `id`, preserving its `target` (the `xywh` selector shown above) unchanged, and carrying the recognized text as the `TextualBody` value. Item order must match the order of "Existing lines" — do not reorder.
+4. If HTTP PUT is available, send the request once. On any non-2xx response, do not retry — fall back. If HTTP PUT is unavailable from the start, go directly to the fallback.
+5. Report counts (lines updated/in payload, lines flagged illegible) and which path was used.
 
 ## Rules
 
@@ -48,34 +47,54 @@ If any precondition fails, stop and return a concise failure report naming the m
 - Use explicit uncertainty markers for unclear glyphs (for example `[a?]`). Do not force certainty.
 - Do not invent expansions. If an abbreviation mark is present, transcribe the mark; do not silently expand.
 - Keep line segmentation stable — one transcription string per existing line annotation.
-- If a line's crop is illegible, send an empty body or skip the PATCH and report the line id as unresolved — do not fabricate text.
+- If a line's crop is illegible, emit the item with an empty `TextualBody` value and report the line id as unresolved — do not fabricate text, and do not drop the item from `items`.
 
 ## TPEN API
 
-Update one line's text via PATCH with a plain-text body:
+Save every transcription in a single PUT. The `items` array re-uses each existing annotation's URI verbatim as `id` so the server updates in place; replace `<annotation-uri>` with the URI, `xywh=x,y,w,h` with the exact selector value shown in "Existing lines" (copied verbatim, not recomputed), and `<recognized line text>` with the transcription (empty string for fully illegible lines).
 
 ```
-PATCH {{pageEndpoint}}/line/<lineId>/text
+PUT {{pageEndpoint}}
 Authorization: Bearer {{token}}
-Content-Type: text/plain
+Content-Type: application/json
 
-<the transcribed line text>
+{
+  "items": [
+    {
+      "id": "<annotation-uri>",
+      "type": "Annotation",
+      "@context": "http://www.w3.org/ns/anno.jsonld",
+      "body": [{ "type": "TextualBody", "value": "<recognized line text>", "format": "text/plain" }],
+      "target": {
+        "source": "{{canvasId}}",
+        "type": "SpecificResource",
+        "selector": {
+          "type": "FragmentSelector",
+          "conformsTo": "http://www.w3.org/TR/media-frags/",
+          "value": "xywh=x,y,w,h"
+        }
+      },
+      "motivation": "transcribing"
+    }
+  ]
+}
 ```
 
-`<lineId>` is the trailing path segment of the annotation URI listed above (the last `/`-separated segment).
+## Fallback
 
-On any non-2xx response, include the HTTP status and response body in that line's failure report.
+When the direct PUT is impossible or returns non-2xx, emit the `{ "items": [...] }` body from TPEN API as the final code block of your report. It must be valid JSON (no comments, no placeholders — substitute the real URIs, xywh selectors, and recognized text). The user will paste it into the TPEN splitscreen tool, which submits it with their authorized token.
 
 ## Completion
 
-On success, report:
+Direct PUT path, report:
 
-- operation: `PATCH line text`
-- target: {{pageEndpoint}}/line/<lineId>/text per line
-- count: number of lines updated
+- operation: `PUT page`
+- target: {{pageEndpoint}}
+- counts: lines updated, lines flagged illegible
 
-On failure, report:
+Fallback path, report:
 
-- the failing stage (image fetch, recognition, PATCH, etc.)
-- HTTP status and error body if applicable
-- the line id(s) affected and a recommended next step
+- path: `fallback`
+- counts: lines in payload, lines flagged illegible
+- HTTP status and error body if a PUT was attempted first
+- final code block: the full `{ "items": [...] }` JSON for the user to paste
