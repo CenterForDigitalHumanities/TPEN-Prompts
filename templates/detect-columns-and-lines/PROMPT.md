@@ -35,8 +35,6 @@ If any precondition fails, stop and return a concise failure report. Missing HTT
 6. For each column, POST `{ label, annotations }` where `annotations` is the server-assigned line ids that belong to that column. Labels must be unique and must not clash with anything in "Existing columns on this page".
 7. Report counts: lines saved, columns created, and any failures.
 
-Execution order is strict on the main path: lines are PUT first, then columns are POSTed against the now-persisted line ids. If the Project read fails and column state cannot be verified, you may proceed to save lines and skip column association — flag it clearly in the report.
-
 ## Rules
 
 - Preserve reading order across columns and within each column.

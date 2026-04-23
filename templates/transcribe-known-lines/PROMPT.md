@@ -22,14 +22,14 @@ Each entry is `<lineId>: <xywh selector>` in canvas coordinates. If the list is 
 ## Preconditions
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`, and a non-empty existing-lines list above. If any is missing, stop and report.
-2. Vision capability: you must be able to load the page image as raw bytes and crop/inspect per-line regions. A fetcher that returns only a prose description of the image does not count.
+2. Vision capability: you must be able to load the page image as raw bytes and crop/inspect per-line regions.
 3. Authorization: `{{token}}` is present and trusted — it will be used to persist the result on your behalf.
 
-If any precondition fails, stop and return a concise failure report naming the missing capability. Missing HTTP-write capability is not a failure; it triggers the fallback below.
+If any precondition fails, stop and return a concise failure report. Missing HTTP-write capability is not a failure; it triggers the fallback below.
 
 ## Steps
 
-1. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. If either is `(unknown)`, GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
+1. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. Otherwise GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
 2. Fetch the page image and a per-line crop using each line's `xywh` from the list above. Verify each crop visibly contains a single line of inked text.
 3. Run handwriting text recognition over each crop. Apply the recognition rules below.
 4. For each line, PATCH the text to its line-text endpoint.
@@ -37,9 +37,10 @@ If any precondition fails, stop and return a concise failure report naming the m
 
 ## Rules
 
+- Identify the script and language from the image before transcribing; apply the paleographic conventions standard to that tradition.
 - Prioritize diplomatic transcription over normalization. Preserve orthography and punctuation as observed.
-- Use explicit uncertainty markers for unclear glyphs (for example `[a?]`). Do not force certainty.
-- Do not invent expansions. If an abbreviation mark is present, transcribe the mark; do not silently expand.
+- Mark uncertain glyphs with an explicit uncertainty convention (for example `[a?]` for Latin scripts, or an equivalent for the detected tradition). Do not force certainty.
+- Do not invent expansions. When a suspension, contraction, or ligature marker is present, transcribe the marker itself; do not silently expand.
 - Keep line segmentation stable — one transcription string per existing line annotation.
 - If a line's crop is illegible, send an empty body or skip the PATCH and report the line id as unresolved — do not fabricate text.
 

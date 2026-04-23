@@ -33,19 +33,19 @@ If any precondition fails, stop and return a concise failure report. Missing HTT
 
 ## Rules
 
-### Detection (IMAGE_ANALYSIS)
+### Detection
 
 - Preserve reading order. Prefer high recall for likely text lines over aggressive pruning.
 - Keep line boxes tight but do not clip ascenders/descenders.
 - Flag ambiguous regions in the report rather than silently dropping them.
 - Bounds MUST be saved as integer coordinates in canvas space. No percent, no `pixel:` prefix on the selector value.
 
-### Recognition (HANDWRITING_TEXT_RECOGNITION)
+### Recognition
 
-- Prioritize diplomatic transcription over normalization.
-- Preserve orthography and punctuation as observed.
-- Use explicit uncertainty markers for unclear glyphs (for example `[a?]`). Do not force certainty.
-- Do not invent expansions. If an abbreviation mark is present, transcribe the mark; do not silently expand.
+- Identify the script and language from the image before transcribing; apply the paleographic conventions standard to that tradition.
+- Prioritize diplomatic transcription over normalization. Preserve orthography and punctuation as observed.
+- Mark uncertain glyphs with an explicit uncertainty convention (for example `[a?]` for Latin scripts, or an equivalent for the detected tradition). Do not force certainty.
+- Do not invent expansions. When a suspension, contraction, or ligature marker is present, transcribe the marker itself; do not silently expand.
 - Keep line segmentation stable even when text is partially uncertain.
 - If a crop is fully illegible, save the annotation with an empty text body and flag the line id in the report — do not fabricate text.
 

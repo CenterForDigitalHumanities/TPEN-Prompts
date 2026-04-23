@@ -74,8 +74,6 @@ if (!response.ok) {
 }
 ```
 
-Column verification (best-effort): if you need to re-read current columns mid-task, GET `{{projectEndpoint}}` with `Authorization: Bearer {{token}}` and locate the page inside `project.layers[*].pages[*]` — inspect `page.columns`. Do not block column creation on a failed Project read; continue with the POSTs and flag verification as unavailable.
-
 ## Completion
 
 On success, report:
@@ -93,4 +91,4 @@ On failure, report:
 
 ## Fallback
 
-If you cannot issue the POSTs yourself, complete detection and line assignment, then emit a JSON array of `{ "label", "annotations": [ … ] }` objects — one per column, even when there is only one — as a single JSON code block. A human will submit it via the host tool, which POSTs each column in order and stops at the first failure. Label-uniqueness still matters; do not duplicate any label from "Existing columns on this page". Do not fabricate column geometry or misassign lines when vision or context is missing; that still stops the task.
+If you cannot issue the POSTs yourself, complete detection and line assignment, then emit a JSON array of `{ "label", "annotations": [ … ] }` objects — one per column, even when there is only one — as a single JSON code block. A human will submit it via the host tool. Label-uniqueness still matters; do not duplicate any label from "Existing columns on this page". Do not fabricate column geometry or misassign lines when vision or context is missing; that still stops the task.
