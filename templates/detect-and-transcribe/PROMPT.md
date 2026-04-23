@@ -1,6 +1,6 @@
 # Task: detect and transcribe every text line on a TPEN3 page end-to-end
 
-You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services.
+You are assisting with TPEN manuscript transcription.
 
 ## Context
 
@@ -17,9 +17,10 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes, measure pixel coordinates, and crop/inspect per-line regions.
-3. Authorization: `{{token}}` is present and trusted — it will be used to persist the result on your behalf.
 
-If any precondition fails, stop and return a concise failure report. Missing HTTP-write capability is not a failure; it triggers the fallback below.
+If any precondition fails, stop and return a concise failure report.
+
+**Capability check.** Before anything else, decide whether you can issue an authenticated HTTP request with `Authorization: Bearer {{token}}`. If yes, follow `## TPEN API` below. If no, skip straight to `## Fallback` — do not attempt curl/wget substitutes, do not narrate the limitation, do not partially execute the direct path.
 
 ## Steps
 
@@ -27,9 +28,8 @@ If any precondition fails, stop and return a concise failure report. Missing HTT
 2. Fetch the page image. Detect every text line in reading order.
 3. For each line, measure a bounding box and convert to integer canvas coordinates. Clamp to the canvas and round.
 4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
-5. Build one Annotation per line with the recognized text as the `TextualBody` value and `xywh=x,y,w,h` (integer canvas coordinates).
-6. PUT the full set of line annotations to the page endpoint in a single request. Text rides in each item's `body: [TextualBody]` — no follow-up PATCH is needed.
-7. Report counts (lines saved) and notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
+5. Build one Annotation per line using the shape defined in `## TPEN API` below, with the recognized text as the `TextualBody` value and `xywh=x,y,w,h` in integer canvas coordinates.
+6. Submit the full set of line annotations via the path chosen by the Capability check.
 
 ## Rules
 
@@ -79,29 +79,12 @@ Content-Type: application/json
 }
 ```
 
-Error handling:
+## Fallback
 
-```javascript
-if (!response.ok) {
-    throw new Error(`TPEN API ${response.status}: ${await response.text()}`)
-}
-```
+If the capability check failed, the concrete payload for the splitscreen panel is the request body shown in `## TPEN API` above, with all fields filled in from your analysis.
+
+In the fallback path, your entire final response must be that JSON payload and nothing else — no markdown fences, no prose before or after — because the host tool does `JSON.parse` on the pasted text.
 
 ## Completion
 
-On success, report:
-
-- operation: `PUT page`
-- target: `{{pageEndpoint}}`
-- counts: lines saved, lines with non-empty text, lines flagged uncertain
-- notable ambiguities worth a human review
-
-On failure, report:
-
-- the failing stage (image fetch, detection, recognition, PUT)
-- HTTP status and error body
-- recommended next step
-
-## Fallback
-
-If you cannot issue the PUT yourself, complete detection and recognition through payload construction and emit the full `{ "items": [ … ] }` body above as a single JSON code block — a human will submit it via the host tool. Do not fabricate geometry or transcriptions when vision or context is missing; that still stops the task.
+Report what was persisted and flag anything ambiguous, illegible, or unresolved for human review.

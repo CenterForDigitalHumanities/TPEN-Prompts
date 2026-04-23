@@ -1,6 +1,6 @@
 # Task: detect column regions on a TPEN3 page and assign existing lines to them
 
-You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services.
+You are assisting with TPEN manuscript transcription.
 
 ## Context
 
@@ -27,9 +27,10 @@ Each entry is `<lineId>: <xywh selector>` in canvas coordinates. Use these ids v
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`, and a non-empty existing-lines list above. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes and measure pixel coordinates on it.
-3. Authorization: `{{token}}` is present and trusted — it will be used to persist the result on your behalf.
 
-If any precondition fails, stop and return a concise failure report. Missing HTTP-write capability is not a failure; it triggers the fallback below.
+If any precondition fails, stop and return a concise failure report.
+
+**Capability check.** Before anything else, decide whether you can issue an authenticated HTTP request with `Authorization: Bearer {{token}}`. If yes, follow `## TPEN API` below. If no, skip straight to `## Fallback` — do not attempt curl/wget substitutes, do not narrate the limitation, do not partially execute the direct path.
 
 ## Steps
 
@@ -37,8 +38,7 @@ If any precondition fails, stop and return a concise failure report. Missing HTT
 2. Analyze the page image and detect column regions in reading order.
 3. For each detected column, determine which of the existing line ids (from the list above) fall within its bounds using each line's `xywh`. A line is assigned to exactly one column.
 4. Choose a unique label per column (e.g., `Column A`, `Column B`). The label must not clash with any label listed under "Existing columns on this page".
-5. POST one column at a time via the column endpoint, with `{ label, annotations }` where `annotations` is the array of line ids assigned to that column.
-6. Report the count of created columns and any per-column failures.
+5. Submit each column via the path chosen by the Capability check, using the body shape defined in `## TPEN API` below.
 
 ## Rules
 
@@ -64,31 +64,14 @@ Content-Type: application/json
 }
 ```
 
-Each `<line-id>` is the trailing id segment of a line annotation listed above.
-
-Error handling:
-
-```javascript
-if (!response.ok) {
-    throw new Error(`TPEN API ${response.status}: ${await response.text()}`)
-}
-```
-
-## Completion
-
-On success, report:
-
-- operation: `POST column`
-- target: `{{pageEndpoint}}/column`
-- count: number of columns created
-- per-column line counts
-
-On failure, report:
-
-- the failing stage (image fetch, detection, POST)
-- HTTP status and error body for any failed POST
-- recommended next step (e.g., choose a different label, reassign lines)
+Each `<line-id>` is the trailing id segment of a line annotation listed above. Submit one column at a time — the server creates one column per POST.
 
 ## Fallback
 
-If you cannot issue the POSTs yourself, complete detection and line assignment, then emit a JSON array of `{ "label", "annotations": [ … ] }` objects — one per column, even when there is only one — as a single JSON code block. A human will submit it via the host tool. Label-uniqueness still matters; do not duplicate any label from "Existing columns on this page". Do not fabricate column geometry or misassign lines when vision or context is missing; that still stops the task.
+If the capability check failed, the concrete payload for the splitscreen panel is a JSON array of the `{ "label", "annotations" }` objects shown in `## TPEN API` above — one element per column, even when only one column is detected. The host tool iterates the array and POSTs each object in turn.
+
+In the fallback path, your entire final response must be that JSON payload and nothing else — no markdown fences, no prose before or after — because the host tool does `JSON.parse` on the pasted text.
+
+## Completion
+
+Report what was persisted and flag anything ambiguous, illegible, or unresolved for human review.

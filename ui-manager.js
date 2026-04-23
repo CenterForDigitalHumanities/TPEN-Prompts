@@ -256,7 +256,8 @@ export class UIManager {
         const ready = Boolean(projectID && pageID)
         const textarea = el('textarea', {
             id: 'fallback-input', rows: 10, spellcheck: false, autocomplete: 'off',
-            placeholder: '{ "items": [ … ] }\nor\n{ "label": "Column A", "annotations": ["…"] }\nor\n[ { "label": "…", "annotations": ["…"] }, … ]'
+            placeholder: '{ "items": [ … ] }\nor\n{ "label": "Column A", "annotations": ["…"] }\nor\n[ { "label": "…", "annotations": ["…"] }, … ]',
+            attrs: { 'aria-label': 'JSON payload to submit to TPEN' }
         })
         const submit = el('button', {
             type: 'button', id: 'fallback-submit',
@@ -322,9 +323,12 @@ export class UIManager {
                         return
                     }
                 }
-                await putPage(projectID, pageID, payload, token)
-                setFeedback(`Saved ${payload.items.length} line item${payload.items.length === 1 ? '' : 's'}.`, true)
-                textarea.value = ''
+                const result = await putPage(projectID, pageID, payload, token)
+                const saved = payload.items.length
+                textarea.value = result && typeof result === 'object'
+                    ? JSON.stringify(result, null, 2)
+                    : ''
+                setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server response (with ids) is in the textarea.`, true)
                 return
             }
             if (payload && typeof payload === 'object' && !Array.isArray(payload)
