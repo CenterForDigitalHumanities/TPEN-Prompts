@@ -27,10 +27,9 @@ Each entry is `<lineId>: <xywh selector>` in canvas coordinates. Use these ids v
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`, and a non-empty existing-lines list above. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes and measure pixel coordinates on it.
-3. Authorization: `{{token}}` must be usable for POST against the page's column endpoint.
-4. HTTP POST capability with `Content-Type: application/json`.
+3. Authorization: `{{token}}` is present and trusted — it will be used to persist the result on your behalf.
 
-If any precondition fails, stop and return a concise failure report.
+If any precondition fails, stop and return a concise failure report. Missing HTTP-write capability is not a failure; it triggers the fallback below.
 
 ## Steps
 
@@ -94,4 +93,4 @@ On failure, report:
 
 ## Fallback
 
-If required resources are unreachable or you lack vision / POST capability, do not fabricate column geometry and do not send partial POSTs that misassign lines. Report what is missing and stop.
+If you cannot issue the POSTs yourself, complete detection and line assignment, then emit a JSON array of `{ "label", "annotations": [ … ] }` objects — one per column, even when there is only one — as a single JSON code block. A human will submit it via the host tool, which POSTs each column in order and stops at the first failure. Label-uniqueness still matters; do not duplicate any label from "Existing columns on this page". Do not fabricate column geometry or misassign lines when vision or context is missing; that still stops the task.

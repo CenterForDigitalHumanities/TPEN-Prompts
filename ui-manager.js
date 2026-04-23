@@ -9,7 +9,7 @@
  */
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
-import { pageEndpoint, projectEndpoint } from './tpen-service.js'
+import { pageEndpoint, projectEndpoint, putPage, postColumn } from './tpen-service.js'
 import { trailingId } from './iiif-ids.js'
 
 /**
@@ -69,6 +69,8 @@ export class UIManager {
     #workspaceBody = null
     /** Pending timer for clearing the Copy feedback message. */
     #feedbackTimer = null
+    /** Pending timer for clearing the fallback panel feedback message. */
+    #fallbackFeedbackTimer = null
 
     /**
      * @param {string} [rootId='app'] id of the element to render into.
@@ -234,11 +236,127 @@ export class UIManager {
             el('div', { class: 'controls' }, generateControls),
             el('label', { class: 'output-label', htmlFor: 'output', text: 'Generated prompt' }),
             output,
-            el('div', { class: 'controls' }, [copyBtn, feedback])
+            el('div', { class: 'controls' }, [copyBtn, feedback]),
+            this.#buildFallbackPanel()
         ])
         this.#workspaceBody = body
 
         this.#replace(el('section', { class: 'card' }, [header, body]))
+    }
+
+    /**
+     * Build the paste-JSON fallback panel. Shown inside the workspace body so
+     * it inherits the token-gate (hidden until `token` is present). Enables the
+     * submit button only when `projectID` and `pageID` are also held, since the
+     * dispatcher always targets a specific page.
+     * @returns {HTMLElement}
+     */
+    #buildFallbackPanel() {
+        const { projectID, pageID } = this.state
+        const ready = Boolean(projectID && pageID)
+        const textarea = el('textarea', {
+            id: 'fallback-input', rows: 10, spellcheck: false, autocomplete: 'off',
+            placeholder: '{ "items": [ … ] }\nor\n{ "label": "Column A", "annotations": ["…"] }\nor\n[ { "label": "…", "annotations": ["…"] }, … ]'
+        })
+        const submit = el('button', {
+            type: 'button', id: 'fallback-submit',
+            text: 'Submit to TPEN',
+            disabled: !ready
+        })
+        const feedback = el('span', {
+            class: 'feedback', attrs: { 'aria-live': 'polite' },
+            text: ready ? '' : 'Needs a page context before submission is possible.'
+        })
+        submit.addEventListener('click', () => this.#onFallbackSubmit(textarea, submit, feedback))
+        return el('details', { class: 'fallback' }, [
+            el('summary', { text: 'Paste JSON from LLM (fallback)' }),
+            el('p', { class: 'hint', text: 'Use this when your chat LLM produced the JSON payload but could not call the TPEN API itself. The tool will submit it using the token you authorized.' }),
+            textarea,
+            el('div', { class: 'controls' }, [submit, feedback])
+        ])
+    }
+
+    /**
+     * Parse the pasted JSON, classify its shape, and dispatch the matching
+     * TPEN write. Shapes accepted:
+     * - `{ items: [...] }` → `PUT page`
+     * - `{ label, annotations: [...] }` → single `POST column`
+     * - `[ { label, annotations }, ... ]` → iterate `POST column`, stop at first failure
+     * @param {HTMLTextAreaElement} textarea
+     * @param {HTMLButtonElement} button
+     * @param {HTMLElement} feedback
+     */
+    async #onFallbackSubmit(textarea, button, feedback) {
+        const { projectID, pageID, token } = this.state
+        const raw = textarea.value.trim()
+        const setFeedback = (msg, autoClear = false) => {
+            feedback.textContent = msg
+            if (this.#fallbackFeedbackTimer) {
+                clearTimeout(this.#fallbackFeedbackTimer)
+                this.#fallbackFeedbackTimer = null
+            }
+            if (autoClear) {
+                this.#fallbackFeedbackTimer = setTimeout(() => {
+                    feedback.textContent = ''
+                    this.#fallbackFeedbackTimer = null
+                }, 3000)
+            }
+        }
+        if (!projectID || !pageID || !token) {
+            setFeedback('Missing project, page, or token — cannot submit.')
+            return
+        }
+        if (!raw) {
+            setFeedback('Paste a JSON payload first.')
+            return
+        }
+        let payload
+        try { payload = JSON.parse(raw) }
+        catch { setFeedback('Payload must be valid JSON.'); return }
+
+        button.disabled = true
+        setFeedback('Submitting…')
+        try {
+            if (payload && typeof payload === 'object' && !Array.isArray(payload) && Array.isArray(payload.items)) {
+                for (const item of payload.items) {
+                    if (item === null || (typeof item !== 'object' && typeof item !== 'string')) {
+                        setFeedback('Each item in `items` must be an object or a string IRI.')
+                        return
+                    }
+                }
+                await putPage(projectID, pageID, payload, token)
+                setFeedback(`Saved ${payload.items.length} line item${payload.items.length === 1 ? '' : 's'}.`, true)
+                textarea.value = ''
+                return
+            }
+            if (payload && typeof payload === 'object' && !Array.isArray(payload)
+                && typeof payload.label === 'string' && Array.isArray(payload.annotations)) {
+                await postColumn(projectID, pageID, payload, token)
+                setFeedback(`Created column "${payload.label}".`, true)
+                textarea.value = ''
+                return
+            }
+            if (Array.isArray(payload) && payload.every(c =>
+                c && typeof c === 'object' && typeof c.label === 'string' && Array.isArray(c.annotations))) {
+                for (let i = 0; i < payload.length; i++) {
+                    const col = payload[i]
+                    try { await postColumn(projectID, pageID, col, token) }
+                    catch (err) {
+                        setFeedback(`Created ${i} of ${payload.length} columns; failed on "${col.label}" — ${err.message}`)
+                        return
+                    }
+                }
+                setFeedback(`Created ${payload.length} column${payload.length === 1 ? '' : 's'}.`, true)
+                textarea.value = ''
+                return
+            }
+            setFeedback('Unrecognized payload shape — expected `{items: [...]}`, `{label, annotations}`, or an array of `{label, annotations}`.')
+        } catch (err) {
+            const status = err?.status ? `TPEN API ${err.status}: ` : ''
+            setFeedback(`${status}${err?.message ?? 'Submission failed.'}`)
+        } finally {
+            button.disabled = !(this.state.projectID && this.state.pageID && this.state.token)
+        }
     }
 
     /**

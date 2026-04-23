@@ -17,10 +17,9 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes and measure pixel coordinates on it.
-3. Authorization: `{{token}}` must be usable for PUT against the page endpoint.
-4. HTTP PUT capability with `Content-Type: application/json`.
+3. Authorization: `{{token}}` is present and trusted — it will be used to persist the result on your behalf.
 
-If any precondition fails, stop and return a concise failure report.
+If any precondition fails, stop and return a concise failure report. Missing HTTP-write capability is not a failure; it triggers the fallback below.
 
 ## Steps
 
@@ -93,4 +92,4 @@ On failure, report:
 
 ## Fallback
 
-If required resources are unreachable or you lack vision / PUT capability, do not fabricate line geometry. Report what is missing and stop.
+If you cannot issue the PUT yourself, complete detection through payload construction and emit the full `{ "items": [ … ] }` body above as a single JSON code block — a human will submit it via the host tool. Do not fabricate geometry when vision or context is missing; that still stops the task.

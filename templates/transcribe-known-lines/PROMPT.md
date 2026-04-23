@@ -23,10 +23,9 @@ Each entry is `<lineId>: <xywh selector>` in canvas coordinates. If the list is 
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`, and a non-empty existing-lines list above. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes and crop/inspect per-line regions. A fetcher that returns only a prose description of the image does not count.
-3. Authorization: `{{token}}` must be usable for PATCH against each line-text endpoint.
-4. HTTP PATCH capability (with `Content-Type: text/plain`).
+3. Authorization: `{{token}}` is present and trusted — it will be used to persist the result on your behalf.
 
-If any precondition fails, stop and return a concise failure report naming the missing capability.
+If any precondition fails, stop and return a concise failure report naming the missing capability. Missing HTTP-write capability is not a failure; it triggers the fallback below.
 
 ## Steps
 
@@ -82,4 +81,4 @@ On failure, report:
 
 ## Fallback
 
-If required resources are unreachable or you lack vision / PATCH capability, do not fabricate transcriptions and do not send partial PATCHes that overwrite real text. Report what is missing and stop.
+If you cannot issue the PATCHes yourself, emit a single `{ "items": [ … ] }` JSON code block where each item's `id` is the existing line's full IRI and `body` is `[{ "type": "TextualBody", "value": "<recognized text>", "format": "text/plain" }]`. `target`, `motivation`, `type`, and `@context` may be preserved from the existing annotation or omitted; the server routes items with an http `id` as updates, not creations. A human will submit it via the host tool. Do not fabricate transcriptions when vision or context is missing; that still stops the task.

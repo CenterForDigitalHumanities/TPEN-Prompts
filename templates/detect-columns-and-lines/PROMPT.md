@@ -21,22 +21,21 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes and measure pixel coordinates on it.
-3. Authorization: `{{token}}` must be usable for both POST (column) and PUT (page) against the page endpoints.
-4. HTTP POST and PUT capability with `Content-Type: application/json`.
+3. Authorization: `{{token}}` is present and trusted — it will be used to persist the result on your behalf.
 
-If any precondition fails, stop and return a concise failure report.
+If any precondition fails, stop and return a concise failure report. Missing HTTP-write capability is not a failure; it triggers the fallback below.
 
 ## Steps
 
 1. Resolve canvas dimensions. Use `{{canvasWidth}}`/`{{canvasHeight}}` when numeric. Otherwise GET `{{canvasId}}` and read `width`/`height`. If that fails, GET `{{manifestUri}}` and find the matching canvas in `items` by id.
 2. Fetch the page image. Detect column regions in reading order first, then detect the lines inside each column (reading order preserved within each column).
 3. For every line, measure a bounding box and convert to integer canvas coordinates. Clamp to the canvas and round.
-4. Mint a stable local id for each line (for example, `line-1`, `line-2`, …) so you can reference them in column `annotations` arrays before the PUT assigns real ids. After the PUT, use the server-assigned ids when creating columns.
+4. Mint a stable local id for each line (for example, `line-1`, `line-2`, …) so you can reference them in column `annotations` arrays before the PUT assigns real ids. After the PUT, use the server-assigned ids when creating columns. Main-path only — in fallback there is no server-id round-trip, so columns are dropped (see Fallback).
 5. PUT every detected line to the page endpoint (see TPEN API below). Capture the server-assigned annotation ids from the response.
 6. For each column, POST `{ label, annotations }` where `annotations` is the server-assigned line ids that belong to that column. Labels must be unique and must not clash with anything in "Existing columns on this page".
 7. Report counts: lines saved, columns created, and any failures.
 
-Execution order is strict: lines are PUT first, then columns are POSTed against the now-persisted line ids. If the Project read fails and column state cannot be verified, you may proceed to save lines and skip column association — flag it clearly in the report.
+Execution order is strict on the main path: lines are PUT first, then columns are POSTed against the now-persisted line ids. If the Project read fails and column state cannot be verified, you may proceed to save lines and skip column association — flag it clearly in the report.
 
 ## Rules
 
@@ -114,4 +113,4 @@ On failure, report:
 
 ## Fallback
 
-If vision / write capability is missing, do not fabricate geometry or send partial payloads. Report what is missing and stop.
+If you cannot issue the PUT yourself: skip column segmentation entirely (columns require a server-id round-trip not available in the paste flow) and detect lines in global page reading order. Emit the full `{ "items": [ … ] }` body above as a single JSON code block — a human will submit it via the host tool. Do not fabricate geometry when vision or context is missing; that still stops the task.

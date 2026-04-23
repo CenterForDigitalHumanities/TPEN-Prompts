@@ -17,10 +17,9 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`. If any is missing, stop and report.
 2. Vision capability: you must be able to load the page image as raw bytes, measure pixel coordinates, and crop/inspect per-line regions.
-3. Authorization: `{{token}}` must be usable for PUT against the page endpoint (and optionally PATCH for per-line text updates).
-4. HTTP PUT capability with `Content-Type: application/json`; optional PATCH with `Content-Type: text/plain`.
+3. Authorization: `{{token}}` is present and trusted — it will be used to persist the result on your behalf.
 
-If any precondition fails, stop and return a concise failure report.
+If any precondition fails, stop and return a concise failure report. Missing HTTP-write capability is not a failure; it triggers the fallback below.
 
 ## Steps
 
@@ -29,9 +28,8 @@ If any precondition fails, stop and return a concise failure report.
 3. For each line, measure a bounding box and convert to integer canvas coordinates. Clamp to the canvas and round.
 4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
 5. Build one Annotation per line with the recognized text as the `TextualBody` value and `xywh=x,y,w,h` (integer canvas coordinates).
-6. PUT the full set of line annotations to the page endpoint in a single request.
-7. Optionally PATCH a specific line's text afterward if a recognition result needs a later revision (see TPEN API).
-8. Report counts (lines saved) and notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
+6. PUT the full set of line annotations to the page endpoint in a single request. Text rides in each item's `body: [TextualBody]` — no follow-up PATCH is needed.
+7. Report counts (lines saved) and notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
 
 ## Rules
 
@@ -81,17 +79,7 @@ Content-Type: application/json
 }
 ```
 
-Optional per-line text revision after the PUT:
-
-```
-PATCH {{pageEndpoint}}/line/<lineId>/text
-Authorization: Bearer {{token}}
-Content-Type: text/plain
-
-<updated transcription text>
-```
-
-Error handling (both calls):
+Error handling:
 
 ```javascript
 if (!response.ok) {
@@ -103,17 +91,17 @@ if (!response.ok) {
 
 On success, report:
 
-- operation: `PUT page` (plus any follow-up `PATCH line text`)
+- operation: `PUT page`
 - target: `{{pageEndpoint}}`
 - counts: lines saved, lines with non-empty text, lines flagged uncertain
 - notable ambiguities worth a human review
 
 On failure, report:
 
-- the failing stage (image fetch, detection, recognition, PUT, or PATCH)
+- the failing stage (image fetch, detection, recognition, PUT)
 - HTTP status and error body
 - recommended next step
 
 ## Fallback
 
-If vision / write capability is missing, do not fabricate geometry or transcriptions. Report what is missing and stop.
+If you cannot issue the PUT yourself, complete detection and recognition through payload construction and emit the full `{ "items": [ … ] }` body above as a single JSON code block — a human will submit it via the host tool. Do not fabricate geometry or transcriptions when vision or context is missing; that still stops the task.
