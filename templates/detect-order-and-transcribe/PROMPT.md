@@ -29,11 +29,10 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
-5. Assemble the per-line list in the global reading-order sequence from step 2 — this fixes the page's canonical line order for both paths.
-6. If HTTP PUT is available, build the full payload under **TPEN API** from that list and send the request once. On any non-2xx response, do not retry — fall back.
-7. If HTTP PUT is unavailable (or step 6 fell back), emit the condensed payload under **Fallback** as the final code block.
-8. Report counts (lines saved/in payload, non-empty text, uncertain) and which path was used (direct PUT or fallback).
-9. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged) and the detected block count so reviewers know whether a multi-block layout was recognised.
+5. If HTTP PUT is available, build the full payload under **TPEN API** in the global reading-order sequence from step 2 and send the request once. On any non-2xx response, do not retry — fall back.
+6. If HTTP PUT is unavailable (or step 5 fell back), emit the condensed payload under **Fallback** as the final code block.
+7. Report counts (lines saved/in payload, non-empty text, uncertain) and which path was used (direct PUT or fallback).
+8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged) and the detected block count so reviewers know whether a multi-block layout was recognised.
 
 ## Rules
 

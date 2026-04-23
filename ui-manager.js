@@ -131,11 +131,6 @@ function expandFallbackItem(item, canvasId, existingItemsById) {
     return out
 }
 
-/** `{ items: [...] }` page-PUT shape — the only shape any prompt fallback emits. */
-function isItemsPayload(p) {
-    return p && typeof p === 'object' && !Array.isArray(p) && Array.isArray(p.items)
-}
-
 /**
  * Validate a pre-expansion `items` array, returning a user-facing error string
  * or `null`. Catches two erasure traps:
@@ -449,7 +444,7 @@ export class UIManager {
         setFeedback('Submitting…')
         const opts = { projectID, pageID, token, setFeedback, writeTextarea }
         try {
-            if (isItemsPayload(payload)) {
+            if (payload && typeof payload === 'object' && !Array.isArray(payload) && Array.isArray(payload.items)) {
                 await this.#submitItems(payload.items, opts)
                 return
             }
