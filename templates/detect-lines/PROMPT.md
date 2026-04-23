@@ -72,8 +72,10 @@ Content-Type: application/json
 
 If the capability check failed, the concrete payload for the splitscreen panel is the request body shown in `## TPEN API` above, with all fields filled in from your analysis.
 
-In the fallback path, your entire final response must be that JSON payload and nothing else — no markdown fences, no prose before or after — because the host tool does `JSON.parse` on the pasted text.
+Emit only the JSON — not the HTTP verb line, not the `Authorization` header.
+
+In the fallback path, your entire final response must be that JSON payload and nothing else — no prose before or after — because the host tool does `JSON.parse` on the pasted text.
 
 ## Completion
 
-Report what was persisted and flag anything ambiguous, illegible, or unresolved for human review.
+After the direct-API path, report what was persisted and flag anything ambiguous, illegible, or unresolved for human review. In the fallback path, your entire response is the JSON payload (per `## Fallback`) — no report.

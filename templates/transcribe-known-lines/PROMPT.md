@@ -22,7 +22,7 @@ Each entry is `<lineId>: <xywh selector>` in canvas coordinates. If the list is 
 ## Preconditions
 
 1. Required context present: `projectID`, `pageID`, `canvasId`, `{{token}}`, and a non-empty existing-lines list above. If any is missing, stop and report.
-2. Vision capability: you must be able to load the page image as raw bytes and crop/inspect per-line regions.
+2. Vision capability: you must be able to load the page image as raw bytes and inspect for line-by-line text as a means of textual transcription.
 
 If any precondition fails, stop and return a concise failure report.
 
@@ -85,8 +85,10 @@ The server routes `http`-id items as updates, not creations. `target`, `motivati
 
 If the capability check failed, the concrete payload for the splitscreen panel is the `PUT page` body shown in `## TPEN API` above (the batched alternative, not the primary PATCH form), with one item per line you transcribed.
 
-In the fallback path, your entire final response must be that JSON payload and nothing else — no markdown fences, no prose before or after — because the host tool does `JSON.parse` on the pasted text.
+Emit only the JSON — not the HTTP verb line, not the `Authorization` header.
+
+In the fallback path, your entire final response must be that JSON payload and nothing else — no prose before or after — because the host tool does `JSON.parse` on the pasted text.
 
 ## Completion
 
-Report what was persisted and flag anything ambiguous, illegible, or unresolved for human review.
+After the direct-API path, report what was persisted and flag anything ambiguous, illegible, or unresolved for human review. In the fallback path, your entire response is the JSON payload (per `## Fallback`) — no report.
