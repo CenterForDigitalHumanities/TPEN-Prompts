@@ -41,7 +41,7 @@ function canvasDimensions(canvas) {
  * @returns {Record<string, string>}
  */
 export function buildTemplateContext(ctx) {
-    const { canvas, page, projectID, pageID, pageEndpoint, token } = ctx
+    const { canvas, page, pageEndpoint, token } = ctx
     const canvasId = getIRI(canvas) ?? '(unknown canvas id)'
     const imageUrl = extractImageUrl(canvas) ?? '(no image body found on canvas)'
     const { width, height } = canvasDimensions(canvas)
@@ -49,8 +49,6 @@ export function buildTemplateContext(ctx) {
     const canvasHeight = height != null ? String(height) : '(unknown)'
     const lineCount = Array.isArray(page?.items) ? page.items.length : 0
     return {
-        projectID: projectID ?? '',
-        pageID: pageID ?? '',
         canvasId,
         imageUrl,
         canvasWidth,
@@ -94,6 +92,12 @@ function extractXywh(item) {
  *   `[{ "type": "TextualBody", "value": <that text>, "format": "text/plain" }]`.
  *   The common case, so it's worth the shorter display.
  * - `body=<JSON>` — anything else; echo the JSON verbatim.
+ *
+ * Existing TPEN line bodies are expected to always carry `type`, `value`, and
+ * `format`. The `text=` round-trip reconstruction sets `format: "text/plain"`,
+ * so `only.format === 'text/plain'` is a strict match — any other shape (no
+ * format, different format, multiple bodies, non-`TextualBody`) drops to
+ * `body=<JSON>` to preserve fidelity on the PUT echo.
  * @param {any} body an annotation `body` value.
  * @returns {string}
  */
@@ -105,7 +109,7 @@ function formatBody(body) {
             && typeof only === 'object'
             && only.type === 'TextualBody'
             && typeof only.value === 'string'
-            && (only.format === undefined || only.format === 'text/plain')
+            && only.format === 'text/plain'
         if (isPlainTextual) return `text=${JSON.stringify(only.value)}`
     }
     return `body=${JSON.stringify(body)}`

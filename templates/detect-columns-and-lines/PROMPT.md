@@ -4,8 +4,6 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Context
 
-- Project: {{projectID}}
-- Page: {{pageID}}
 - Canvas: {{canvasId}}
 - Canvas Dimensions: {{canvasWidth}} × {{canvasHeight}}
 - Image: {{imageUrl}}
@@ -17,7 +15,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Preconditions
 
-All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
+All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
 1. Ability to fetch the image bytes (or a derivative) and identify line and column bounds from them. Precise pixel measurement is preferred when available; visual estimation from the fetched image is acceptable otherwise.
 2. Either HTTP PUT and POST capability with `Content-Type: application/json`, or the ability to emit the payloads as fallback JSON code blocks in your report. If either verb is unavailable, skip straight to the Fallback section — do not retry.

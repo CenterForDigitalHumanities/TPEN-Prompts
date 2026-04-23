@@ -4,8 +4,6 @@ You are assisting with TPEN manuscript transcription. This task rebuilds the col
 
 ## Context
 
-- Project: {{projectID}}
-- Page: {{pageID}}
 - Canvas: {{canvasId}}
 - Canvas Dimensions: {{canvasWidth}} × {{canvasHeight}}
 - Image: {{imageUrl}}
@@ -29,7 +27,7 @@ The body form is one of:
 
 ## Preconditions
 
-All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions, existing-line list) are provided above. This task operates on an existing line set: `lineCount` = `{{lineCount}}`. If `lineCount` is `0`, stop immediately and return a failure report — this task cannot create lines.
+All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions, existing-line list) are provided above. This task operates on an existing line set: `lineCount` = `{{lineCount}}`. If `lineCount` is `0`, stop immediately and return a failure report — this task cannot create lines.
 
 You must have:
 
@@ -52,7 +50,7 @@ Use only tools already available in your environment. Do not install packages, l
 5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center.
 6. DELETE every existing column on the page (see TPEN API below). On any non-2xx, stop and report. Do not POST or PUT after a DELETE failure.
 7. For each detected column, POST `{ label, annotations }` where `annotations` is the contiguous slice of the reading-order id sequence from step 5 that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any other label chosen in this run. On any non-2xx, stop and report — columns POSTed before the failure remain persisted.
-8. If the reading-order sequence from step 5 differs from the order of "Existing lines", PUT the page with `items` in the new order. Each entry re-uses the existing annotation URI verbatim as its `id`, its `body` reconstructed from the entry's body form, and its `target` rebuilt from the entry's `xywh` selector. The PUT must not change any URI, or the columns POSTed in step 7 will reference dead ids. If the sequence is already in the current order, skip the PUT. On any non-2xx, stop and report.
+8. If the reading-order sequence from step 5 differs from the order of "Existing lines", PUT the page with `items` in the new order. Each entry re-uses the existing annotation URI verbatim as its `id`, its `body` reconstructed from the entry's body form, and its `target` rebuilt from the entry's `xywh` selector. The server remaps column references when URIs change, but echoing `body` and `target` verbatim avoids minting unnecessary RERUM versions. If the sequence is already in the current order, skip the PUT. On any non-2xx, stop and report.
 9. Report: columns deleted, columns created, whether the page order was updated, and per-column line counts.
 
 ## Rules
@@ -63,7 +61,7 @@ Use only tools already available in your environment. Do not install packages, l
 - Column labels must be unique within this run. The DELETE in step 6 clears every existing column, so no pre-existing label can collide.
 - Each existing line belongs to exactly one column.
 - Do not POST a column with an empty `annotations` array — the server rejects it. If a detected column would end up with zero assigned lines, merge its assignments into the nearest populated column instead.
-- Echo each line's existing `body` and `target` unchanged in the PUT. Changing either mints a new line URI on the server, which breaks the columns created in step 7.
+- Echo each line's existing `body` and `target` unchanged in the PUT. Changing either mints a new RERUM version of the line; the server remaps columns to the new URIs, but echoing verbatim avoids the needless version.
 
 ## TPEN API
 
@@ -100,7 +98,7 @@ Content-Type: application/json
   "items": [
     {
       "id": "<existing-annotation-uri>",
-      "body": [],
+      "body": <echoed body — reconstruct from this line's body form under "Existing lines">,
       "target": {
         "source": "{{canvasId}}",
         "type": "SpecificResource",
