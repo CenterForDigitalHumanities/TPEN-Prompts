@@ -17,7 +17,13 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Existing lines
 
-Each entry is `<annotation-uri> | xywh=<xywh selector> | body=<body JSON>` in canvas coordinates. Use the full annotation URI verbatim when assigning lines to columns, and echo each line's `body` JSON verbatim in the PUT — the services API overwrites `body` with `[]` when an item omits it.
+Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates. Use the full annotation URI verbatim when assigning lines to columns, and reconstruct each line's `body` verbatim in the PUT — the services API overwrites `body` with `[]` when an item omits it.
+
+The body form is one of:
+
+- `body=[]` — echo as `[]`.
+- `text="<value>"` — echo as `[{ "type": "TextualBody", "value": <that value>, "format": "text/plain" }]`.
+- `body=<JSON>` — echo the JSON verbatim.
 
 {{existingLines}}
 
@@ -44,7 +50,7 @@ Use only tools already available in your environment. Do not install packages, l
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. For each detected column, determine which of the existing line ids (from the list above) belong to it. Assign a line to the column whose canvas-space region contains the center point of the line's `xywh`. If a line's center falls outside every detected column, assign it to the nearest column by Euclidean distance from the center point to the column's region (distance `0` when the point is inside). Each line belongs to exactly one column.
 5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center.
-6. Build the `{ "items": [...] }` payload described under TPEN API from that sequence. Each `items` entry re-uses the existing annotation URI verbatim as its `id`, its `target` verbatim, and its `body` JSON verbatim from the "Existing lines" list — the services API replaces `body` with `[]` when an item omits it, so the echo is required to keep existing transcriptions.
+6. Build the `{ "items": [...] }` payload described under TPEN API from that sequence. Each `items` entry re-uses the existing annotation URI verbatim as its `id`, its `target` verbatim, and its `body` reconstructed from the entry's body form (see "Existing lines") — the services API replaces `body` with `[]` when an item omits it, so the reconstruction is required to keep existing transcriptions.
 7. Build the column payload `[{ label, annotations }, ...]` where each `annotations` array is the contiguous slice of the reading-order id sequence that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any label under "Existing columns on this page". Both the direct and fallback paths use the same ids — the existing annotation URIs listed above — so the same column payload works in either path.
 8. If HTTP PUT and POST are available: PUT the page once, then POST each column once. On any non-2xx, stop and fall back for whatever has not yet persisted. Otherwise go directly to the Fallback.
 9. Report counts (columns created or in payload) and which path was used.
@@ -63,7 +69,7 @@ Use only tools already available in your environment. Do not install packages, l
 
 ## TPEN API
 
-First, reorder the page's line list via a single PUT. The `items` array must contain every existing line — each entry carrying the existing annotation URI verbatim as `id`, its `body` JSON verbatim from the "Existing lines" list, and its original `target` — in the reading-order sequence from step 5.
+First, reorder the page's line list via a single PUT. The `items` array must contain every existing line — each entry carrying the existing annotation URI verbatim as `id`, its `body` reconstructed from the entry's body form in "Existing lines", and its original `target` — in the reading-order sequence from step 5.
 
 ```
 PUT {{pageEndpoint}}
@@ -74,9 +80,7 @@ Content-Type: application/json
   "items": [
     {
       "id": "<existing-annotation-uri>",
-      "type": "Annotation",
-      "@context": "http://www.w3.org/ns/anno.jsonld",
-      "body": <existing body JSON from the "Existing lines" list, verbatim>,
+      "body": [],
       "target": {
         "source": "{{canvasId}}",
         "type": "SpecificResource",
@@ -91,6 +95,8 @@ Content-Type: application/json
   ]
 }
 ```
+
+The example above shows an empty body. Replace `[]` with the reconstructed body for each line (from its `body=…` / `text=…` form).
 
 Then create one POST per detected column. Each `annotations` array is a contiguous slice of the reading-order id sequence, taken verbatim from the "Existing lines" list.
 

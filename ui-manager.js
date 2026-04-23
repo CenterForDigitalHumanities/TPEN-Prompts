@@ -294,7 +294,14 @@ export class UIManager {
     async #onFallbackSubmit(textarea, button, feedback) {
         const { projectID, pageID, token } = this.state
         const raw = textarea.value.trim()
+        // `renderWorkspace` can re-run mid-submit (e.g., token changes via
+        // `updateToken` during an await), detaching the nodes this handler
+        // closed over. Guard each UI write so a detached panel doesn't get
+        // silent stale mutations.
+        const alive = () => textarea.isConnected
+        const writeTextarea = (val) => { if (alive()) textarea.value = val }
         const setFeedback = (msg, autoClear = false) => {
+            if (!alive()) return
             feedback.textContent = msg
             if (this.#fallbackFeedbackTimer) {
                 clearTimeout(this.#fallbackFeedbackTimer)
@@ -335,7 +342,7 @@ export class UIManager {
                 const result = await putPage(projectID, pageID, { items: payload.items }, token)
                 const saved = payload.items.length
                 if (result && typeof result === 'object') {
-                    textarea.value = JSON.stringify(result, null, 2)
+                    writeTextarea(JSON.stringify(result, null, 2))
                     setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server response (with ids) is in the textarea.`, true)
                 } else {
                     setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server returned no body; pasted payload left in the textarea.`, true)
@@ -346,7 +353,7 @@ export class UIManager {
                 && typeof payload.label === 'string' && Array.isArray(payload.annotations)) {
                 await postColumn(projectID, pageID, payload, token)
                 setFeedback(`Created column "${payload.label}".`, true)
-                textarea.value = ''
+                writeTextarea('')
                 return
             }
             if (Array.isArray(payload) && payload.every(c =>
@@ -355,13 +362,13 @@ export class UIManager {
                     const col = payload[i]
                     try { await postColumn(projectID, pageID, col, token) }
                     catch (err) {
-                        textarea.value = JSON.stringify(payload.slice(i), null, 2)
+                        writeTextarea(JSON.stringify(payload.slice(i), null, 2))
                         setFeedback(`Created ${i} of ${payload.length} columns; failed on "${col.label}" — ${err.message}. Remaining columns kept in the textarea for retry.`)
                         return
                     }
                 }
                 setFeedback(`Created ${payload.length} column${payload.length === 1 ? '' : 's'}.`, true)
-                textarea.value = ''
+                writeTextarea('')
                 return
             }
             setFeedback('Unrecognized payload shape — expected `{items: [...]}`, `{label, annotations}`, or an array of `{label, annotations}`.')
@@ -369,7 +376,9 @@ export class UIManager {
             const status = err?.status ? `TPEN API ${err.status}: ` : ''
             setFeedback(`${status}${err?.message ?? 'Submission failed.'}`)
         } finally {
-            button.disabled = !(this.state.projectID && this.state.pageID && this.state.token)
+            if (button.isConnected) {
+                button.disabled = !(this.state.projectID && this.state.pageID && this.state.token)
+            }
         }
     }
 

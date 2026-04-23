@@ -83,6 +83,35 @@ function extractXywh(item) {
 }
 
 /**
+ * Summarize a line's body for the "Existing lines" listing.
+ *
+ * Three forms, chosen to keep the listing compact while still letting PUT
+ * consumers reconstruct an existing body verbatim (the services API replaces
+ * `body` with `[]` when a PUT item omits it):
+ *
+ * - `body=[]` — empty body; echo as `[]`.
+ * - `text="…"` — single plain-text `TextualBody`; echo as
+ *   `[{ "type": "TextualBody", "value": <that text>, "format": "text/plain" }]`.
+ *   The common case, so it's worth the shorter display.
+ * - `body=<JSON>` — anything else; echo the JSON verbatim.
+ * @param {any} body an annotation `body` value.
+ * @returns {string}
+ */
+function formatBody(body) {
+    if (!Array.isArray(body) || body.length === 0) return 'body=[]'
+    if (body.length === 1) {
+        const only = body[0]
+        const isPlainTextual = only
+            && typeof only === 'object'
+            && only.type === 'TextualBody'
+            && typeof only.value === 'string'
+            && (only.format === undefined || only.format === 'text/plain')
+        if (isPlainTextual) return `text=${JSON.stringify(only.value)}`
+    }
+    return `body=${JSON.stringify(body)}`
+}
+
+/**
  * Render the current line annotations on a page as a markdown bullet list
  * carrying the fields needed to echo each line back in a page PUT without
  * losing data. Pre-resolving this list in the parent saves the LLM a GET +
@@ -90,9 +119,9 @@ function extractXywh(item) {
  * `page.items[].id` server-side; PATCH-line-text consumers can split the
  * URI's trailing segment themselves.
  *
- * Body is included verbatim (as compact JSON) because the services API
- * replaces `body` with `[]` if the PUT item omits it — echoing the existing
- * body prevents accidental transcription wipes.
+ * Each entry exposes the body as one of three forms — `body=[]`, `text="…"`,
+ * or `body=<JSON>` — consumed by the `detect-columns` and
+ * `transcribe-known-lines` prompts, which document how to reconstruct each.
  * @param {any} fetchedPage the page object returned by `fetchPageResolved`.
  * @returns {string}
  */
@@ -104,8 +133,7 @@ export function formatExistingLines(fetchedPage) {
     return items.map(item => {
         const lineUri = getIRI(item) ?? '(unknown)'
         const xywh = extractXywh(item) ?? '(no xywh selector)'
-        const body = JSON.stringify(item?.body ?? [])
-        return `- ${lineUri} | xywh=${xywh} | body=${body}`
+        return `- ${lineUri} | xywh=${xywh} | ${formatBody(item?.body)}`
     }).join('\n')
 }
 

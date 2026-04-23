@@ -111,4 +111,4 @@ Fallback path, report:
 - counts: lines in payload, columns not yet created
 - HTTP status and error body if a request was attempted first
 - final code block: the full `{ "items": [...] }` JSON for the user to paste
-- next step: re-run with `detect-columns` after the items paste succeeds, to create the columns
+- next step: re-run with `detect-columns` after the items paste succeeds, to create the columns. If any columns were already created before the failure (list their labels in the report), the follow-up run must avoid duplicating those labels — `detect-columns` receives the "Existing columns on this page" list and will honour it.

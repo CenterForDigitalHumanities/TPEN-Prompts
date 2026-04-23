@@ -30,8 +30,10 @@ async function authedJson(path, method, body, token) {
     if (body !== undefined) init.body = JSON.stringify(body)
     const res = await fetch(`${CONFIG.servicesURL}${path}`, init)
     if (!res.ok) {
-        const detail = await res.json().catch(() => null)
-        const msg = detail?.message ?? res.statusText
+        // TPEN services always emit JSON errors (see tpen3-services
+        // utilities/shared.js#respondWithError and utilities/routeErrorHandler.js).
+        const detail = await res.json().catch(() => ({}))
+        const msg = detail.message ?? detail.error ?? res.statusText
         const err = new Error(`${res.status} ${path}: ${msg}`)
         err.status = res.status
         throw err
@@ -78,6 +80,11 @@ export function fetchPageResolved(projectID, pageID, token) {
  * PUT a page body (`{ items: [...] }`). Used by the fallback JSON-paste flow
  * when the user's LLM cannot issue writes itself. Items may be new (no `id`,
  * or a non-http local id) or updates (item `id` is the line's full IRI).
+ *
+ * Note: items whose `body` is omitted get `body=[]` on the server — the Line
+ * class sets `body: this.body ?? []` before saving, which spreads over the existing
+ * RERUM document. Echo each existing item's body back to preserve its
+ * transcription.
  * @param {string} projectID
  * @param {string} pageID
  * @param {{ items: Array<any> }} body
