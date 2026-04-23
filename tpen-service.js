@@ -30,14 +30,15 @@ async function authedJson(path, method, body, token) {
     if (body !== undefined) init.body = JSON.stringify(body)
     const res = await fetch(`${CONFIG.servicesURL}${path}`, init)
     if (!res.ok) {
-        const detail = await res.text().catch(() => '')
-        const err = new Error(`${res.status} ${res.statusText} — ${path}${detail ? `: ${detail}` : ''}`)
+        const detail = await res.json().catch(() => null)
+        const msg = detail?.message ?? res.statusText
+        const err = new Error(`${res.status} ${path}: ${msg}`)
         err.status = res.status
         throw err
     }
     const text = await res.text()
     if (!text) return null
-    try { return JSON.parse(text) } catch { return text }
+    return JSON.parse(text)
 }
 
 /**

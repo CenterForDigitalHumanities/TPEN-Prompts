@@ -71,6 +71,8 @@ export class UIManager {
     #feedbackTimer = null
     /** Pending timer for clearing the fallback panel feedback message. */
     #fallbackFeedbackTimer = null
+    /** Fallback-panel submit button; toggled by `updateToken`. */
+    #fallbackSubmit = null
 
     /**
      * @param {string} [rootId='app'] id of the element to render into.
@@ -245,32 +247,36 @@ export class UIManager {
     }
 
     /**
-     * Build the paste-JSON fallback panel. Shown inside the workspace body so
-     * it inherits the token-gate (hidden until `token` is present). Enables the
-     * submit button only when `projectID` and `pageID` are also held, since the
-     * dispatcher always targets a specific page.
+     * Build the paste-JSON fallback panel. The submit button requires
+     * `projectID`, `pageID`, AND `token` — `renderWorkspace` still draws the
+     * body (minus generate/copy) when the token is absent and shows an auth
+     * button, so the panel cannot rely on a workspace-level token gate.
+     * `updateToken` flips the submit-disabled state when the token arrives
+     * after the panel was built.
      * @returns {HTMLElement}
      */
     #buildFallbackPanel() {
-        const { projectID, pageID } = this.state
-        const ready = Boolean(projectID && pageID)
+        const { projectID, pageID, token } = this.state
+        const hasPage = Boolean(projectID && pageID)
+        const ready = hasPage && Boolean(token)
         const textarea = el('textarea', {
-            id: 'fallback-input', rows: 10, spellcheck: false, autocomplete: 'off',
+            rows: 10, spellcheck: false, autocomplete: 'off',
             placeholder: '{ "items": [ … ] }\nor\n{ "label": "Column A", "annotations": ["…"] }\nor\n[ { "label": "…", "annotations": ["…"] }, … ]',
             attrs: { 'aria-label': 'JSON payload to submit to TPEN' }
         })
         const submit = el('button', {
-            type: 'button', id: 'fallback-submit',
+            type: 'button',
             text: 'Submit to TPEN',
             disabled: !ready
         })
+        this.#fallbackSubmit = submit
         const feedback = el('span', { class: 'feedback', attrs: { 'aria-live': 'polite' } })
         submit.addEventListener('click', () => this.#onFallbackSubmit(textarea, submit, feedback))
         const children = [
             el('summary', { text: 'Paste JSON from LLM (fallback)' }),
             el('p', { class: 'hint', text: 'Use this when your chat LLM produced the JSON payload but could not call the TPEN API itself. The tool will submit it using the token you authorized.' })
         ]
-        if (!ready) children.push(el('p', { class: 'hint', text: 'Needs a page context before submission is possible.' }))
+        if (!hasPage) children.push(el('p', { class: 'hint', text: 'Needs a page context before submission is possible.' }))
         children.push(textarea, el('div', { class: 'controls' }, [submit, feedback]))
         return el('details', { class: 'fallback' }, children)
     }
@@ -325,10 +331,12 @@ export class UIManager {
                 }
                 const result = await putPage(projectID, pageID, payload, token)
                 const saved = payload.items.length
-                textarea.value = result && typeof result === 'object'
-                    ? JSON.stringify(result, null, 2)
-                    : ''
-                setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server response (with ids) is in the textarea.`, true)
+                if (result && typeof result === 'object') {
+                    textarea.value = JSON.stringify(result, null, 2)
+                    setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server response (with ids) is in the textarea.`, true)
+                } else {
+                    setFeedback(`Saved ${saved} line item${saved === 1 ? '' : 's'}. Server returned no body; pasted payload left in the textarea.`, true)
+                }
                 return
             }
             if (payload && typeof payload === 'object' && !Array.isArray(payload)
@@ -381,6 +389,7 @@ export class UIManager {
                 return
             }
             if (this.#generateBtn) this.#generateBtn.disabled = true
+            if (this.#fallbackSubmit) this.#fallbackSubmit.disabled = true
             if (this.#workspaceBody) this.#workspaceBody.hidden = true
             return
         }
@@ -389,6 +398,10 @@ export class UIManager {
             this.#authButton = null
         }
         if (this.#generateBtn) this.#generateBtn.disabled = false
+        if (this.#fallbackSubmit) {
+            const { projectID, pageID } = this.state
+            this.#fallbackSubmit.disabled = !(projectID && pageID)
+        }
         if (this.#workspaceBody) this.#workspaceBody.hidden = false
     }
 
