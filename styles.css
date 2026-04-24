@@ -115,7 +115,8 @@ button:hover:not(:disabled) { filter: brightness(1.05); }
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+summary:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
@@ -163,3 +164,25 @@ textarea:focus-visible {
 .tool-header {
     text-align: center;
 }
+
+.fallback {
+    margin-top: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface);
+}
+.fallback summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--muted);
+    padding: 0.25rem 0;
+}
+.fallback summary:hover,
+.fallback summary:focus-visible { color: var(--text); }
+.fallback .hint {
+    margin: 0.5rem 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+.fallback textarea { margin-top: 0.25rem; }

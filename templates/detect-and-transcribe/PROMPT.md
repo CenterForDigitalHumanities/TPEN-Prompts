@@ -1,11 +1,9 @@
 # Task: detect and transcribe every text line on a TPEN3 page end-to-end
 
-You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services.
+You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services (direct) or emitted as a fallback JSON payload for the user to paste.
 
 ## Context
 
-- Project: {{projectID}}
-- Page: {{pageID}}
 - Canvas: {{canvasId}}
 - Canvas Dimensions: {{canvasWidth}} × {{canvasHeight}}
 - Image: {{imageUrl}}
@@ -13,12 +11,12 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Preconditions
 
-All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
+All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
 1. Ability to fetch the image bytes (or a derivative) and identify line bounds and text from them. Precise pixel measurement is preferred when available; visual estimation and on-sight transcription from the fetched image are acceptable otherwise.
-2. HTTP PUT capability with `Content-Type: application/json`.
+2. Either HTTP PUT capability with `Content-Type: application/json`, or the ability to emit the payload as a fallback JSON code block in your report. If HTTP PUT is not available, skip straight to the Fallback section — do not retry.
 
-Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is genuinely missing (e.g. no way to issue an HTTP PUT), stop and return a failure report naming it rather than installing anything.
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities.
 
 ## Steps
 
@@ -31,9 +29,9 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
 4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
-5. Build one Annotation per line with the recognized text as the `TextualBody` value and `xywh=x,y,w,h` as the bounding box fragment selector.
-6. PUT every detected line to the page endpoint in a single request (see TPEN API below).
-7. Report counts: lines saved, lines with non-empty text, lines flagged uncertain.
+5. If HTTP PUT is available, build the full payload under **TPEN API** — one Annotation per line with the recognized text and `xywh=x,y,w,h` selector — and send the request once. On any non-2xx response, do not retry — fall back.
+6. If HTTP PUT is unavailable (or step 5 fell back), emit the condensed payload under **Fallback** as the final code block.
+7. Report counts (lines saved/in payload, non-empty text, uncertain) and which path was used (direct PUT or fallback).
 8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
 
 ## Rules
@@ -45,6 +43,7 @@ Use only tools already available in your environment. Do not install packages, l
 - Prefer tight bounds when you can measure them; best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
 - Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
 - Completion beats refusal: approximate bounds on most lines are more useful than nothing — this data will be reviewed and corrected downstream.
+- Zero lines detected is an unprocessable outcome. Stop and report — do not PUT, do not emit a fallback payload. An empty `items` array would erase every existing annotation on the page.
 
 ### Recognition (HANDWRITING_TEXT_RECOGNITION)
 
@@ -67,8 +66,6 @@ Content-Type: application/json
 {
   "items": [
     {
-      "type": "Annotation",
-      "@context": "http://www.w3.org/ns/anno.jsonld",
       "body": [{ "type": "TextualBody", "value": "<recognized line text>", "format": "text/plain" }],
       "target": {
         "source": "{{canvasId}}",
@@ -85,19 +82,33 @@ Content-Type: application/json
 }
 ```
 
-On any non-2xx response, stop and include the HTTP status and response body in the failure report.
+## Fallback
+
+When the direct PUT is impossible or returns non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON (no comments, no placeholders — substitute the real coordinates and recognized text).
+
+```
+{
+  "items": [
+    { "text": "<recognized line text>", "target": "xywh=x,y,w,h" }
+  ]
+}
+```
+
+One item per detected line, in reading order. `target` is the bare selector value (no `#`, no `pixel:` prefix). `text` is an empty string for fully illegible lines — do not drop the item.
 
 ## Completion
 
-On success, report:
+Direct PUT path, report:
 
 - operation: `PUT page`
 - target: {{pageEndpoint}}
 - counts: lines saved, lines with non-empty text, lines flagged uncertain
 - notable ambiguities worth a human review
 
-On failure, report:
+Fallback path, report:
 
-- the failing stage (image fetch, detection, recognition, PUT)
-- HTTP status and error body
-- recommended next step
+- path: `fallback`
+- counts: lines in payload, lines with non-empty text, lines flagged uncertain
+- HTTP status and error body if a PUT was attempted first
+- notable ambiguities worth a human review
+- final code block: the condensed `{ "items": [...] }` JSON for the user to paste

@@ -1,11 +1,9 @@
 # Task: detect every text line on a TPEN3 page and save them to the page
 
-You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services.
+You are assisting with TPEN manuscript transcription. Perform the task end-to-end and stop only when the result has been persisted via TPEN Services (direct) or emitted as a fallback JSON payload for the user to paste.
 
 ## Context
 
-- Project: {{projectID}}
-- Page: {{pageID}}
 - Canvas: {{canvasId}}
 - Canvas Dimensions: {{canvasWidth}} × {{canvasHeight}}
 - Image: {{imageUrl}}
@@ -13,12 +11,12 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Preconditions
 
-All required inputs (`projectID`, `pageID`, `canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
+All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
 1. Ability to fetch the image bytes (or a derivative) and identify line bounds from them. Precise pixel measurement is preferred when available; visual estimation from the fetched image is acceptable otherwise.
-2. HTTP PUT capability with `Content-Type: application/json`.
+2. Either HTTP PUT capability with `Content-Type: application/json`, or the ability to emit the payload as a fallback JSON code block in your report. If HTTP PUT is not available, skip straight to the Fallback section — do not retry.
 
-Use only tools already available in your environment. Do not install packages, libraries, or system utilities. If a required capability is genuinely missing (e.g. no way to issue an HTTP PUT), stop and return a failure report naming it rather than installing anything.
+Use only tools already available in your environment. Do not install packages, libraries, or system utilities.
 
 ## Steps
 
@@ -30,8 +28,9 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
-4. PUT every detected line to the page endpoint in a single request (see TPEN API below). Leave `body` empty — no text yet.
-5. Report count and any failure cause.
+4. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, do not retry — fall back.
+5. If HTTP PUT is unavailable (or step 4 fell back), emit the condensed payload under **Fallback** as the final code block.
+6. Report count and which path was used (direct PUT or fallback).
 
 ## Rules
 
@@ -40,6 +39,7 @@ Use only tools already available in your environment. Do not install packages, l
 - Prefer tight bounds when you can measure them; best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
 - Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
 - Completion beats refusal: approximate bounds on most lines are more useful than nothing — this data will be reviewed and corrected downstream.
+- Zero lines detected is an unprocessable outcome. Stop and report — do not PUT, do not emit a fallback payload. An empty `items` array would erase every existing annotation on the page.
 
 ## TPEN API
 
@@ -53,8 +53,6 @@ Content-Type: application/json
 {
   "items": [
     {
-      "type": "Annotation",
-      "@context": "http://www.w3.org/ns/anno.jsonld",
       "body": [],
       "target": {
         "source": "{{canvasId}}",
@@ -71,18 +69,31 @@ Content-Type: application/json
 }
 ```
 
-On any non-2xx response, stop and include the HTTP status and response body in the failure report.
+## Fallback
+
+When the direct PUT is impossible or returns non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON (no comments, no placeholders — substitute the real coordinates).
+
+```
+{
+  "items": [
+    { "target": "xywh=x,y,w,h" }
+  ]
+}
+```
+
+One item per detected line, in reading order. `target` is the bare selector value (no `#`, no `pixel:` prefix). `body` is omitted because no text is produced by this task.
 
 ## Completion
 
-On success, report:
+Direct PUT path, report:
 
 - operation: `PUT page`
 - target: {{pageEndpoint}}
 - count: number of line annotations saved
 
-On failure, report:
+Fallback path, report:
 
-- the failing stage (image fetch, detection, PUT)
-- HTTP status and error body
-- recommended next step
+- path: `fallback`
+- count: number of line annotations in the payload
+- HTTP status and error body if a PUT was attempted first
+- final code block: the condensed `{ "items": [...] }` JSON for the user to paste

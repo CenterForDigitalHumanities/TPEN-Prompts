@@ -99,23 +99,3 @@ export function persistToken(token) {
     localStorage.setItem(TOKEN_KEY, token)
     return token
 }
-
-/**
- * Extract the agent IRI from a TPEN JWT.
- *
- * Mirrors tpen3-interfaces/components/iiif-tools/index.js:getAgentIRIFromToken.
- * The agent IRI lives in a custom claim whose key ends with `/agent`
- * (typically `http://store.rerum.io/agent`).
- * @param {string} token
- * @returns {string|null}
- */
-export function getAgentIRIFromToken(token) {
-    try {
-        const decoded = decodeJwt(token)
-        if (!decoded || typeof decoded !== 'object') return null
-        const key = Object.keys(decoded).find(k => k.endsWith('/agent')) || 'http://store.rerum.io/agent'
-        return decoded[key] ?? null
-    } catch {
-        return null
-    }
-}
