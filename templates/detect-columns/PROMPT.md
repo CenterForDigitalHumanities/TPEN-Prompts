@@ -23,7 +23,7 @@ The body form is one of:
 
 ## Preconditions
 
-All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions, existing-line list) are provided above. This task operates on an existing line set: `lineCount` = `{{lineCount}}`. If `lineCount` is `0`, stop immediately and return a failure report — this task cannot create lines.
+All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions, existing-line list) are provided above. This template only groups existing lines: `lineCount` = `{{lineCount}}`. If `lineCount` is `0`, stop immediately and report — this prompt must not create lines.
 
 You must have:
 

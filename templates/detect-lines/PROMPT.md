@@ -11,7 +11,9 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Preconditions
 
-All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
+All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. This template only creates new lines: `lineCount` = `{{lineCount}}`. If `lineCount` is not `0`, stop immediately and report — existing line data must not be modified.
+
+You must have:
 
 1. Ability to fetch the image bytes (or a derivative) and identify line bounds from them. Precise pixel measurement is preferred when available; visual estimation from the fetched image is acceptable otherwise.
 2. Either HTTP PUT capability with `Content-Type: application/json`, or the ability to emit the payload as a fallback JSON code block in your report. If HTTP PUT is not available, skip straight to the Fallback section — do not retry.
