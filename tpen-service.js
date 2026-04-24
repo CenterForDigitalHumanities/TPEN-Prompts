@@ -27,7 +27,7 @@ async function tpenServiceRequest(path, method, body, token) {
         },
         signal: AbortSignal.timeout(15000)
     }
-    if (body !== undefined) body = JSON.stringify(body)
+    if (body !== undefined) options.body = JSON.stringify(body)
     const res = await fetch(`${CONFIG.servicesURL}${path}`, options)
     if (!res.ok) {
         // TPEN services always emit JSON errors (see tpen3-services

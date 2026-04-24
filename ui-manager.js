@@ -55,6 +55,7 @@ const OPTIONAL_ID_FIELDS = [
  * selector value.
  * @param {string} canvasId
  * @param {string} xywh the bare selector value (e.g. `xywh=10,20,300,40`).
+ * @returns {{source: string, type: string, selector: {type: string, conformsTo: string, value: string}}}
  */
 function buildSpecificResourceTarget(canvasId, xywh) {
     return {
@@ -71,9 +72,14 @@ function buildSpecificResourceTarget(canvasId, xywh) {
 /**
  * Pull the bare `xywh=…` selector value out of whatever target shape the
  * fallback item carries. Delegates all target-shape handling to `parseXywh`
- * in iiif-ids.js so the known-line-update branch (`{id, text}`, no target)
- * transparently recovers xywh from existing lines whose hydrated targets are
- * either `SpecificResource` objects or legacy bare `"<canvas>#xywh=…"` strings.
+ * in iiif-ids.js so both `SpecificResource` objects and legacy bare
+ * `"<canvas>#xywh=…"` strings round-trip correctly.
+ *
+ * Known-line updates (item `id` matches an existing line) ignore any
+ * `target` the LLM included and re-use the existing line's selector — the
+ * fallback flow is documented as text-only in `transcribe-known-lines`, so
+ * trusting an LLM-supplied target would silently clobber bounds when the
+ * model echoes a stale or wrong selector.
  *
  * Returns `null` when no selector can be resolved; the caller leaves `target`
  * off and the services API rejects the item with `Line data is malformed`.
@@ -82,13 +88,10 @@ function buildSpecificResourceTarget(canvasId, xywh) {
  * @returns {string|null}
  */
 function resolveXywh(item, existingItemsById) {
-    const direct = parseXywh(item?.target)
-    if (direct) return direct
-    if (typeof item?.id === 'string') {
-        const existing = existingItemsById.get(item.id)
-        return parseXywh(existing?.target)
+    if (typeof item?.id === 'string' && existingItemsById.has(item.id)) {
+        return parseXywh(existingItemsById.get(item.id)?.target)
     }
-    return null
+    return parseXywh(item?.target)
 }
 
 /**
@@ -148,8 +151,10 @@ function validateItems(items) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
             return 'Each item in `items` must be an annotation object.'
         }
-        if ('target' in item && typeof item.target !== 'string' && typeof item.target !== 'object') {
-            return 'Each item `target` must be an `xywh=…` string or a full target object.'
+        if ('target' in item) {
+            const t = item.target
+            const ok = typeof t === 'string' || (t !== null && typeof t === 'object' && !Array.isArray(t))
+            if (!ok) return 'Each item `target` must be an `xywh=…` string or a full target object.'
         }
         if ('text' in item && typeof item.text !== 'string') {
             return 'Each item `text` must be a string.'
