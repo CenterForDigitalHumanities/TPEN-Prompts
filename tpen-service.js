@@ -18,7 +18,11 @@ import { CONFIG } from './config.js'
  * @returns {Promise<any>} parsed JSON body.
  */
 async function tpenServiceRequest(path, method, body, token) {
-    if (!token) throw new Error(`Missing auth token for ${path}`)
+    if (!token) {
+        const err = new Error(`Missing auth token for ${path}`)
+        err.status = 401
+        throw err
+    }
     const options = {
         method,
         headers: {

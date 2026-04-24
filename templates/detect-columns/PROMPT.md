@@ -72,7 +72,7 @@ Then POST each new column — one request per column:
 
 ```
 POST {{pageEndpoint}}/column
-Authorization: Bearer {{token}}
+Authorization: Bearer <same token as above>
 Content-Type: application/json
 
 {
@@ -87,7 +87,7 @@ Finally, if step 8 determined the reading order changed, PUT the page to rewrite
 
 ```
 PUT {{pageEndpoint}}
-Authorization: Bearer {{token}}
+Authorization: Bearer <same token as above>
 Content-Type: application/json
 
 {

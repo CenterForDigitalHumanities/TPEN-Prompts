@@ -335,13 +335,15 @@ export class UIManager {
             select.append(el('option', { value: t.id, text: t.label }))
         }
 
-        // Prompts embed the auth token in `{{token}}`; generating before
-        // consent yields a prompt whose Authorization header is `Bearer ` with
-        // nothing after it. Gate Generate on token presence and nudge the user
-        // toward the consent button in the header.
+        // Prompts embed the auth token in `{{token}}` and the page endpoint
+        // in `{{pageEndpoint}}`. Generating without either yields a prompt
+        // whose Authorization header is `Bearer ` (no token) or whose target
+        // URL is `(unknown page endpoint)`. Gate Generate on both, and nudge
+        // the user toward whatever's missing.
+        const canGenerate = Boolean(token && pageID)
         const generateBtn = el('button', {
             type: 'button', id: 'generate-btn', text: 'Generate prompt',
-            disabled: !token
+            disabled: !canGenerate
         })
         this.#generateBtn = generateBtn
         const output = el('textarea', {
@@ -359,13 +361,19 @@ export class UIManager {
             generateBtn
         ]
 
-        const body = el('div', { class: 'workspace-body', hidden: !token }, [
-            el('div', { class: 'controls' }, generateControls),
+        const bodyChildren = [
+            el('div', { class: 'controls' }, generateControls)
+        ]
+        if (!pageID) {
+            bodyChildren.push(el('p', { class: 'hint', text: 'Needs a page context before a prompt can be generated.' }))
+        }
+        bodyChildren.push(
             el('label', { class: 'output-label', htmlFor: 'output', text: 'Generated prompt' }),
             output,
             el('div', { class: 'controls' }, [copyBtn, feedback]),
             this.#buildFallbackPanel()
-        ])
+        )
+        const body = el('div', { class: 'workspace-body', hidden: !token }, bodyChildren)
         this.#workspaceBody = body
 
         this.#replace(el('section', { class: 'card' }, [header, body]))
@@ -522,8 +530,16 @@ export class UIManager {
         const reloadUrl = mintTranscriptionUrl(projectID, pageID)
         if (reloadUrl) {
             setFeedback(`Saved ${saved} ${noun}. Refreshing the transcription page…`)
-            window.top.location.href = reloadUrl
-            return
+            // The PUT already succeeded; if the navigation throws (sandbox
+            // without `allow-top-navigation`, or top is cross-origin and
+            // the click's user activation has been consumed by the await
+            // chain above), don't let it surface as a submission failure.
+            try {
+                window.top.location.href = reloadUrl
+                return
+            } catch (err) {
+                console.warn('top.location navigation blocked', err)
+            }
         }
         setFeedback(`Saved ${saved} ${noun}. Refresh the transcription page to see the new lines in the column.`, true)
     }
@@ -555,9 +571,9 @@ export class UIManager {
             this.#authButton.remove()
             this.#authButton = null
         }
-        if (this.#generateBtn) this.#generateBtn.disabled = false
+        const { projectID, pageID } = this.state
+        if (this.#generateBtn) this.#generateBtn.disabled = !pageID
         if (this.#fallbackSubmit) {
-            const { projectID, pageID } = this.state
             this.#fallbackSubmit.disabled = !(projectID && pageID)
         }
         if (this.#workspaceBody) this.#workspaceBody.hidden = false
