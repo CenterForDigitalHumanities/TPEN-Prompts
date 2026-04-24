@@ -503,14 +503,29 @@ export class UIManager {
         }
         const expanded = items.map(i => expandFallbackItem(i, canvasId, existingItemsById))
         const result = await putPage(projectID, pageID, { items: expanded }, token)
+        // Drop the saved page into local state so the next Generate's
+        // "Existing lines" listing reflects what was just persisted.
+        this.state.page = result
+        writeTextarea(JSON.stringify(result, null, 2))
         const saved = expanded.length
         const noun = `line item${saved === 1 ? '' : 's'}`
-        if (result && typeof result === 'object') {
-            writeTextarea(JSON.stringify(result, null, 2))
-            setFeedback(`Saved ${saved} ${noun}. Server response (with ids) is in the textarea.`, true)
-        } else {
-            setFeedback(`Saved ${saved} ${noun}. Server returned no body; pasted payload left in the textarea.`, true)
+        // Mint `<origin>/transcribe?projectID=…&pageID=…` from the parent
+        // origin (taken from `document.referrer`, which survives the default
+        // `strict-origin-when-cross-origin` policy) and the workspace state,
+        // then top-navigate there to refresh the transcription column.
+        // Writing `top.location.href` is allowed cross-origin under user
+        // activation (the Submit click); when it works the iframe is torn
+        // down. When no origin is resolvable (sandboxed iframe with
+        // `allow-top-navigation` withheld, or strict `no-referrer` policy),
+        // fall back to a manual-refresh hint. The proper postMessage-based
+        // fix lives in TPEN-interfaces#528.
+        const reloadUrl = mintTranscriptionUrl(projectID, pageID)
+        if (reloadUrl) {
+            setFeedback(`Saved ${saved} ${noun}. Refreshing the transcription page…`)
+            window.top.location.href = reloadUrl
+            return
         }
+        setFeedback(`Saved ${saved} ${noun}. Refresh the transcription page to see the new lines in the column.`, true)
     }
 
     /**
@@ -656,5 +671,22 @@ function labelOf(obj, fallback) {
 function truncateToken(token) {
     if (typeof token !== 'string' || token.length <= 24) return token
     return `${token.slice(0, 10)}…${token.slice(-10)}`
+}
+
+/**
+ * Fallback reload target when the parent didn't forward `parentUrl` via
+ * `TPEN_CONTEXT`. Minted from the parent origin (taken from
+ * `document.referrer`, which survives the default cross-origin
+ * `strict-origin-when-cross-origin` policy) and the tpen3-interfaces
+ * transcription permalink shape (`/transcribe?projectID=…&pageID=…`).
+ * @param {string} projectID
+ * @param {string} pageID
+ * @returns {string|null} the minted URL, or null when no origin is available.
+ */
+function mintTranscriptionUrl(projectID, pageID) {
+    let origin = null
+    try { origin = new URL(document.referrer).origin } catch {}
+    if (!origin) return null
+    return `${origin}/transcribe?projectID=${encodeURIComponent(projectID)}&pageID=${encodeURIComponent(pageID)}`
 }
 
