@@ -41,7 +41,7 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
-   Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
+   Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. For each detected column, determine which of the existing line ids (from the list above) belong to it. Assign a line to the column whose canvas-space region contains the center point of the line's `xywh`. If a line's center falls outside every detected column, assign it to the nearest column by Euclidean distance from the center point to the column's region (distance `0` when the point is inside). Each line belongs to exactly one column.
 5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center.
 6. DELETE every existing column on the page (see TPEN API below). On any non-2xx, stop and report. Do not POST or PUT after a DELETE failure.

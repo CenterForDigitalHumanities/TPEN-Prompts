@@ -18,7 +18,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. You must have:
 
 1. Ability to fetch the image bytes (or a derivative) and identify line and column bounds from them. Precise pixel measurement is preferred when available; visual estimation from the fetched image is acceptable otherwise.
-2. Either HTTP PUT and POST capability with `Content-Type: application/json`, or the ability to emit the lines-only payload as a fallback JSON code block in your report. Column creation has no fallback — if POST is unavailable, column grouping is dropped. If PUT is unavailable, skip straight to the Fallback section — do not retry.
+2. Either HTTP PUT and POST capability with `Content-Type: application/json`, or the ability to emit the lines-only payload as a fallback JSON code block in your report. If either verb is unavailable, skip straight to the Fallback section — do not retry. Column creation has no fallback; it is dropped when the fallback path is taken.
 
 Use only tools already available in your environment. Do not install packages, libraries, or system utilities.
 
@@ -31,9 +31,9 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
-   Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
+   Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once in the global reading-order sequence from step 2. If the PUT returns non-2xx, stop and fall back — lines are not persisted yet. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The PUT response's `items` array is guaranteed to be in the same order as the submitted items, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
-5. If HTTP PUT is unavailable (or the PUT in step 4 failed), emit the condensed payload under **Fallback** as the final code block. Column creation is out of scope for the fallback path.
+5. If HTTP PUT or POST is unavailable (or the PUT in step 4 failed), emit the condensed payload under **Fallback** as the final code block. Column creation is out of scope for the fallback path.
 6. Report counts (lines saved/in payload, columns created/in payload) and which path was used.
 
 ## Rules

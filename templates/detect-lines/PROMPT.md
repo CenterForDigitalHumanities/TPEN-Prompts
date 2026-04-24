@@ -27,7 +27,7 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
-   Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
+   Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, do not retry — fall back.
 5. If HTTP PUT is unavailable (or step 4 fell back), emit the condensed payload under **Fallback** as the final code block.
 6. Report count and which path was used (direct PUT or fallback).

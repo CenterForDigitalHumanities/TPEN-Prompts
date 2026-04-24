@@ -142,7 +142,7 @@ export function formatExistingColumns(project, page) {
         .find(pg => trailingId(pg) === tail)
     const cols = projectPage?.columns ?? []
     if (cols.length === 0) {
-        return '- (No existing columns on this page — labels must be unique when created.)'
+        return '- (No existing columns on this page)'
     }
     return cols.map(c => `- ${c.label ?? '(unlabeled)'}`).join('\n')
 }
