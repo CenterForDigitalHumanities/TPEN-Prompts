@@ -119,4 +119,3 @@ Fallback path, report:
 - counts: lines in payload
 - HTTP status and error body if a request was attempted first
 - final code block: the condensed `{ "items": [...] }` JSON for the user to paste
-- list the labels of any columns already created before the failure, so a follow-up pass can avoid duplicating them.
