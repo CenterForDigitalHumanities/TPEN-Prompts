@@ -155,9 +155,17 @@ function validateItems(items) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
             return 'Each item in `items` must be an annotation object.'
         }
-        if ('target' in item) {
+        const hasId = typeof item.id === 'string'
+        const hasTargetField = 'target' in item && item.target != null
+        // Without an id we can't look up an existing target; without a target we
+        // can't build one. Either path resolves a selector — neither makes the
+        // server throw "Line data is malformed" with a generic 500.
+        if (!hasId && !hasTargetField) {
+            return 'Each item must include `target` (xywh selector) or an `id` matching an existing line.'
+        }
+        if (hasTargetField) {
             const t = item.target
-            const ok = typeof t === 'string' || (t !== null && typeof t === 'object' && !Array.isArray(t))
+            const ok = typeof t === 'string' || (typeof t === 'object' && !Array.isArray(t))
             if (!ok) return 'Each item `target` must be an `xywh=…` string or a full target object.'
         }
         if ('text' in item && typeof item.text !== 'string') {
@@ -166,7 +174,7 @@ function validateItems(items) {
         if ('body' in item && item.body !== undefined && !Array.isArray(item.body)) {
             return 'Each item `body` must be an array of body entries.'
         }
-        if (typeof item.id === 'string') {
+        if (hasId) {
             const hasText = typeof item.text === 'string'
             const hasBody = Array.isArray(item.body) && item.body.length > 0
             if (!hasText && !hasBody) {
