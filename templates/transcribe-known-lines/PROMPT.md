@@ -11,7 +11,7 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 
 ## Existing lines
 
-Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates. The body form is `body=[]` (empty), `text="<value>"` (single plain-text `TextualBody`), or `body=<JSON>` (anything else) — use it as context for what's already on the line. The fallback payload re-uses the full annotation URI verbatim as the `id` of each item; the splitscreen tool preserves the existing target server-side and updates only the body text.
+Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates. The body form is `body=[]` (empty), `text="<value>"` (single plain-text `TextualBody`), or `body=<JSON>` (anything else) — use it as context for what's already on the line. The fallback payload re-uses the full annotation URI verbatim as the `id` of each item; the splitscreen tool rebuilds each existing target from the hydrated page before PUTting it, and updates only the body text.
 
 {{existingLines}}
 

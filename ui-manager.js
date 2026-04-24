@@ -10,7 +10,7 @@
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
 import { pageEndpoint, putPage } from './tpen-service.js'
-import { getIRI, trailingId } from './iiif-ids.js'
+import { getIRI, parseXywh, trailingId } from './iiif-ids.js'
 
 /**
  * Build a DOM element. Recognizes a few special prop keys:
@@ -70,29 +70,23 @@ function buildSpecificResourceTarget(canvasId, xywh) {
 
 /**
  * Pull the bare `xywh=…` selector value out of whatever target shape the
- * fallback item carries.
+ * fallback item carries. Delegates all target-shape handling to `parseXywh`
+ * in iiif-ids.js so the known-line-update branch (`{id, text}`, no target)
+ * transparently recovers xywh from existing lines whose hydrated targets are
+ * either `SpecificResource` objects or legacy bare `"<canvas>#xywh=…"` strings.
  *
- * - Bare string (condensed shape) → the string itself.
- * - Object `SpecificResource` (legacy full-shape paste) → `selector.value`.
- * - Absent; known-line update (`{id, text}`) → look up the existing line's
- *   target on the hydrated page and extract its selector value.
- *
- * Everything else returns `null`; the caller leaves `target` off and the
- * services API rejects the item with `Line data is malformed` — the same
- * outcome as submitting before the refactor.
+ * Returns `null` when no selector can be resolved; the caller leaves `target`
+ * off and the services API rejects the item with `Line data is malformed`.
  * @param {any} item
  * @param {Map<string, any>} existingItemsById
  * @returns {string|null}
  */
 function resolveXywh(item, existingItemsById) {
-    if (typeof item.target === 'string') return item.target
-    if (item.target && typeof item.target === 'object') {
-        return typeof item.target.selector?.value === 'string' ? item.target.selector.value : null
-    }
-    if (typeof item.id === 'string') {
+    const direct = parseXywh(item?.target)
+    if (direct) return direct
+    if (typeof item?.id === 'string') {
         const existing = existingItemsById.get(item.id)
-        const value = existing?.target?.selector?.value
-        return typeof value === 'string' ? value : null
+        return parseXywh(existing?.target)
     }
     return null
 }

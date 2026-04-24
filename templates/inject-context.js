@@ -10,7 +10,7 @@
  * @author thehabes
  */
 
-import { getIRI, trailingId } from '../iiif-ids.js'
+import { getIRI, parseXywh, trailingId } from '../iiif-ids.js'
 
 /**
  * Pull the first image body URL off a IIIF canvas, or null if none is present.
@@ -57,27 +57,6 @@ export function buildTemplateContext(ctx) {
         pageEndpoint: pageEndpoint ?? '(unknown page endpoint)',
         token: token ?? ''
     }
-}
-
-/**
- * Extract an `xywh=x,y,w,h` fragment from a line annotation's target, accepting
- * both `target.selector.value` and a plain `"source#xywh=..."` string target.
- * Strips the non-standard `pixel:` prefix introduced by Annotorious — prompts
- * and any annotations produced downstream must use plain integer coordinates.
- * @param {any} item
- * @returns {string|null}
- */
-function extractXywh(item) {
-    const sel = item?.target?.selector
-    const selValue = Array.isArray(sel) ? sel[0]?.value : sel?.value
-    let raw = null
-    if (typeof selValue === 'string' && selValue.includes('xywh=')) {
-        raw = selValue.slice(selValue.indexOf('xywh='))
-    } else {
-        const target = typeof item?.target === 'string' ? item.target : null
-        if (target && target.includes('#xywh=')) raw = target.slice(target.indexOf('xywh='))
-    }
-    return raw ? raw.replace(/^xywh=pixel:/, 'xywh=') : null
 }
 
 /**
@@ -142,8 +121,8 @@ export function formatExistingLines(fetchedPage) {
     }
     return items.map(item => {
         const lineUri = getIRI(item) ?? '(unknown)'
-        const xywh = extractXywh(item) ?? '(no xywh selector)'
-        return `- ${lineUri} | xywh=${xywh} | ${formatBody(item?.body)}`
+        const xywh = parseXywh(item?.target) ?? '(no xywh selector)'
+        return `- ${lineUri} | ${xywh} | ${formatBody(item?.body)}`
     }).join('\n')
 }
 
