@@ -9,8 +9,8 @@
  */
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
-import { pageEndpoint, projectEndpoint } from './tpen-service.js'
-import { trailingId } from './iiif-ids.js'
+import { pageEndpoint, putPage } from './tpen-service.js'
+import { getIRI, parseXywh, trailingId } from './iiif-ids.js'
 
 /**
  * Build a DOM element. Recognizes a few special prop keys:
@@ -51,6 +51,141 @@ const OPTIONAL_ID_FIELDS = [
 ]
 
 /**
+ * Build a W3C `SpecificResource` target from a canvas IRI and an `xywh=…`
+ * selector value.
+ * @param {string} canvasId
+ * @param {string} xywh the bare selector value (e.g. `xywh=10,20,300,40`).
+ * @returns {{source: string, type: string, selector: {type: string, conformsTo: string, value: string}}}
+ */
+function buildSpecificResourceTarget(canvasId, xywh) {
+    return {
+        source: canvasId,
+        type: 'SpecificResource',
+        selector: {
+            type: 'FragmentSelector',
+            conformsTo: 'http://www.w3.org/TR/media-frags/',
+            value: xywh
+        }
+    }
+}
+
+/**
+ * Pull the bare `xywh=…` selector value out of whatever target shape the
+ * fallback item carries. Delegates all target-shape handling to `parseXywh`
+ * in iiif-ids.js so both `SpecificResource` objects and legacy bare
+ * `"<canvas>#xywh=…"` strings round-trip correctly.
+ *
+ * Known-line updates (item `id` matches an existing line) ignore any
+ * `target` the LLM included and re-use the existing line's selector — the
+ * fallback flow is documented as text-only in `transcribe-known-lines`, so
+ * trusting an LLM-supplied target would silently clobber bounds when the
+ * model echoes a stale or wrong selector.
+ *
+ * Returns `null` when no selector can be resolved; the caller leaves `target`
+ * off and the services API rejects the item with `Line data is malformed`.
+ * @param {any} item
+ * @param {Map<string, any>} existingItemsById
+ * @returns {string|null}
+ */
+function resolveXywh(item, existingItemsById) {
+    if (typeof item?.id === 'string' && existingItemsById.has(item.id)) {
+        return parseXywh(existingItemsById.get(item.id)?.target)
+    }
+    return parseXywh(item?.target)
+}
+
+/**
+ * Expand a condensed fallback item into a full W3C Annotation. Every output
+ * target is rebuilt fresh with `canvasId` as `source` — we don't trust any
+ * source that rode in on a pasted item or an echoed existing target, so the
+ * rebuilt annotation always points at the canvas the UI is showing.
+ *
+ * The condensed per-item shapes are (by prompt):
+ *
+ * - `{ target: "xywh=…" }` — detection only.
+ * - `{ target: "xywh=…", text }` — detection + transcription.
+ * - `{ id, text }` — known-line update; xywh is looked up from the hydrated
+ *   page.
+ *
+ * Legacy full-shape pastes pass through in all other respects — only
+ * `target.source` gets normalized and `motivation` is filled when missing.
+ * @param {any} item raw parsed item from the fallback textarea.
+ * @param {string|null} canvasId the canvas IRI used as the annotation's target source.
+ * @param {Map<string, any>} existingItemsById lookup from annotation id → resolved page item.
+ * @returns {object} a W3C Annotation ready for PUT.
+ */
+function expandFallbackItem(item, canvasId, existingItemsById) {
+    const out = { ...item }
+    const xywh = resolveXywh(item, existingItemsById)
+    if (xywh) out.target = buildSpecificResourceTarget(canvasId, xywh)
+    if (typeof item.text === 'string') {
+        out.body = item.text === ''
+            ? []
+            : [{ type: 'TextualBody', value: item.text, format: 'text/plain' }]
+        delete out.text
+    }
+    if (!('motivation' in out)) out.motivation = 'transcribing'
+    return out
+}
+
+/**
+ * Validate a pre-expansion `items` array, returning a user-facing error string
+ * or `null`. Catches two erasure traps:
+ *
+ * 1. An empty array — the services PUT handler's top-level copy loop writes
+ *    `page.items = []` even when `itemsProvided` is false, erasing every line
+ *    reference on the page and leaving columns pointing at stale ids. Prompts
+ *    should stop and report "no lines" rather than emit an empty payload.
+ * 2. A known-line update (string `id`) without usable transcription content
+ *    would be PUT with `body` absent or empty, causing the services API to
+ *    overwrite the existing body with `[]` on save
+ *    (Line.js#saveLineToRerum: `body: this.body ?? []`). `'body' in item` is
+ *    not enough — `body: null`, `body: ""`, `body: {}` all collapse to `[]`
+ *    via the `??` fallback. Require either a `text` string or a non-empty
+ *    `body` array; reject any other `body` shape outright so a buggy paste
+ *    can't slip through and silently truncate a line.
+ * @param {Array<any>} items
+ * @returns {string|null}
+ */
+function validateItems(items) {
+    if (items.length === 0) {
+        return '`items` is empty — submitting would erase every line on the page. Regenerate the prompt response with at least one detected line or stop.'
+    }
+    for (const item of items) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            return 'Each item in `items` must be an annotation object.'
+        }
+        const hasId = typeof item.id === 'string'
+        const hasTargetField = 'target' in item && item.target != null
+        // Without an id we can't look up an existing target; without a target we
+        // can't build one. Either path resolves a selector — neither makes the
+        // server throw "Line data is malformed" with a generic 500.
+        if (!hasId && !hasTargetField) {
+            return 'Each item must include `target` (xywh selector) or an `id` matching an existing line.'
+        }
+        if (hasTargetField) {
+            const t = item.target
+            const ok = typeof t === 'string' || (typeof t === 'object' && !Array.isArray(t))
+            if (!ok) return 'Each item `target` must be an `xywh=…` string or a full target object.'
+        }
+        if ('text' in item && typeof item.text !== 'string') {
+            return 'Each item `text` must be a string.'
+        }
+        if ('body' in item && item.body !== undefined && !Array.isArray(item.body)) {
+            return 'Each item `body` must be an array of body entries.'
+        }
+        if (hasId) {
+            const hasText = typeof item.text === 'string'
+            const hasBody = Array.isArray(item.body) && item.body.length > 0
+            if (!hasText && !hasBody) {
+                return `Item for ${item.id} is missing transcription content (\`text\` string or non-empty \`body\` array) — would erase the existing transcription.`
+            }
+        }
+    }
+    return null
+}
+
+/**
  * Renders the three UI states (status, id form, workspace) into a single
  * root node and owns state while a workspace is displayed. The workspace
  * state is re-used by `#onGenerate` / `#onCopy` so generated prompts stay in
@@ -69,6 +204,8 @@ export class UIManager {
     #workspaceBody = null
     /** Pending timer for clearing the Copy feedback message. */
     #feedbackTimer = null
+    /** Fallback-panel submit button; toggled by `updateToken`. */
+    #fallbackSubmit = null
 
     /**
      * @param {string} [rootId='app'] id of the element to render into.
@@ -206,13 +343,15 @@ export class UIManager {
             select.append(el('option', { value: t.id, text: t.label }))
         }
 
-        // Prompts embed the auth token; generating before consent yields an
-        // unusable prompt (templates render "(unable to resolve agent IRI…)").
-        // Gate Generate on token presence and nudge the user toward the consent
-        // button in the header.
+        // Prompts embed the auth token in `{{token}}` and the page endpoint
+        // in `{{pageEndpoint}}`. Generating without either yields a prompt
+        // whose Authorization header is `Bearer ` (no token) or whose target
+        // URL is `(unknown page endpoint)`. Gate Generate on both, and nudge
+        // the user toward whatever's missing.
+        const canGenerate = Boolean(token && pageID)
         const generateBtn = el('button', {
             type: 'button', id: 'generate-btn', text: 'Generate prompt',
-            disabled: !token
+            disabled: !canGenerate
         })
         this.#generateBtn = generateBtn
         const output = el('textarea', {
@@ -230,15 +369,187 @@ export class UIManager {
             generateBtn
         ]
 
-        const body = el('div', { class: 'workspace-body', hidden: !token }, [
-            el('div', { class: 'controls' }, generateControls),
+        const bodyChildren = [
+            el('div', { class: 'controls' }, generateControls)
+        ]
+        if (!pageID) {
+            bodyChildren.push(el('p', { class: 'hint', text: 'Needs a page context before a prompt can be generated.' }))
+        }
+        bodyChildren.push(
             el('label', { class: 'output-label', htmlFor: 'output', text: 'Generated prompt' }),
             output,
-            el('div', { class: 'controls' }, [copyBtn, feedback])
-        ])
+            el('div', { class: 'controls' }, [copyBtn, feedback]),
+            this.#buildFallbackPanel()
+        )
+        const body = el('div', { class: 'workspace-body', hidden: !token }, bodyChildren)
         this.#workspaceBody = body
 
         this.#replace(el('section', { class: 'card' }, [header, body]))
+    }
+
+    /**
+     * Build the paste-JSON fallback panel. Submit requires `projectID`,
+     * `pageID`, AND `token`. The workspace body is hidden when no token is
+     * held (`renderWorkspace` sets `hidden: !token`), so the disabled state
+     * below is belt-and-suspenders against a stale reference being clicked
+     * programmatically. `updateToken` still flips it when the token arrives
+     * after the panel was built so the pageID gate remains authoritative.
+     *
+     * The auto-clear timer for the feedback span lives in this closure, not
+     * on the instance — `renderWorkspace` rebuilds the panel on every render,
+     * and an instance-level timer reference would let an old panel's pending
+     * timer null out a new panel's timer slot.
+     * @returns {HTMLElement}
+     */
+    #buildFallbackPanel() {
+        const { projectID, pageID, token } = this.state
+        const hasPage = Boolean(projectID && pageID)
+        const ready = hasPage && Boolean(token)
+        const textarea = el('textarea', {
+            rows: 10, spellcheck: false, autocomplete: 'off',
+            placeholder: '{ "items": [ { "target": "xywh=10,20,400,30" } ] }',
+            attrs: { 'aria-label': 'JSON payload to submit to TPEN' }
+        })
+        const submit = el('button', {
+            type: 'button',
+            text: 'Submit to TPEN',
+            disabled: !ready
+        })
+        this.#fallbackSubmit = submit
+        const feedback = el('span', { class: 'feedback', attrs: { 'aria-live': 'polite' } })
+        let feedbackTimer = null
+        submit.addEventListener('click', () => this.#onFallbackSubmit({
+            textarea, button: submit, feedback,
+            getTimer: () => feedbackTimer,
+            setTimer: (t) => { feedbackTimer = t }
+        }))
+        const children = [
+            el('summary', { text: `Couldn't Use the API? Paste JSON from LLM here` }),
+            el('p', { class: 'hint', text: 'Use this when your chat LLM produced the JSON payload but could not call the TPEN API itself. This tool will submit it using the token you authorized.' })
+        ]
+        if (!hasPage) children.push(el('p', { class: 'hint', text: 'Needs a page context before submission is possible.' }))
+        children.push(textarea, el('div', { class: 'controls' }, [submit, feedback]))
+        return el('details', { class: 'fallback' }, children)
+    }
+
+    /**
+     * Parse the pasted JSON and submit it as a page PUT. Only one shape is
+     * accepted: `{ items: [...] }` — the shape every prompt fallback emits.
+     * @param {{textarea: HTMLTextAreaElement, button: HTMLButtonElement, feedback: HTMLElement, getTimer: () => any, setTimer: (t: any) => void}} ctx
+     */
+    async #onFallbackSubmit({ textarea, button, feedback, getTimer, setTimer }) {
+        const { projectID, pageID, token } = this.state
+        const raw = textarea.value.trim()
+        // `renderWorkspace` can re-run mid-submit (e.g., token changes via
+        // `updateToken` during an await), detaching the nodes this handler
+        // closed over. Guard each UI write so a detached panel doesn't get
+        // silent stale mutations.
+        const alive = () => textarea.isConnected
+        const writeTextarea = (val) => { if (alive()) textarea.value = val }
+        const setFeedback = (msg, autoClear = false) => {
+            if (!alive()) return
+            feedback.textContent = msg
+            const existing = getTimer()
+            if (existing) {
+                clearTimeout(existing)
+                setTimer(null)
+            }
+            if (autoClear) {
+                const t = setTimeout(() => {
+                    if (getTimer() !== t) return
+                    feedback.textContent = ''
+                    setTimer(null)
+                }, 3000)
+                setTimer(t)
+            }
+        }
+        if (!projectID || !pageID || !token) {
+            setFeedback('Missing project, page, or token — cannot submit.')
+            return
+        }
+        if (!raw) {
+            setFeedback('Paste a JSON payload first.')
+            return
+        }
+        let payload
+        try { payload = JSON.parse(raw) }
+        catch { setFeedback('Payload must be valid JSON.'); return }
+
+        button.disabled = true
+        setFeedback('Submitting…')
+        const opts = { projectID, pageID, token, setFeedback, writeTextarea }
+        try {
+            if (payload && typeof payload === 'object' && !Array.isArray(payload) && Array.isArray(payload.items)) {
+                await this.#submitItems(payload.items, opts)
+                return
+            }
+            setFeedback('Unrecognized payload shape — expected `{ "items": [...] }`.')
+        } catch (err) {
+            setFeedback(err?.message ?? 'Submission failed.')
+        } finally {
+            if (button.isConnected) {
+                button.disabled = !(this.state.projectID && this.state.pageID && this.state.token)
+            }
+        }
+    }
+
+    /**
+     * Validate, expand, and PUT an `items` payload. Narrows the PUT body to
+     * just `{ items }` — top-level keys beyond `items` would otherwise be
+     * applied to the page record by the server's property-copy loop.
+     * @param {Array<any>} items
+     * @param {{projectID:string,pageID:string,token:string,setFeedback:Function,writeTextarea:Function}} opts
+     */
+    async #submitItems(items, { projectID, pageID, token, setFeedback, writeTextarea }) {
+        const validationError = validateItems(items)
+        if (validationError) { setFeedback(validationError); return }
+        const canvasId = getIRI(this.state.canvas)
+        if (!canvasId) {
+            setFeedback('Canvas context missing — reload the workspace and retry.')
+            return
+        }
+        // Index the resolved page's items by id so the expander can recover
+        // each existing line's xywh for known-line updates (`{id, text}` only).
+        // The rebuilt target still uses `canvasId` as `source`; only the xywh
+        // selector value is pulled from the hydrated item.
+        const existingItemsById = new Map()
+        for (const existing of this.state.page?.items ?? []) {
+            const eid = getIRI(existing)
+            if (eid) existingItemsById.set(eid, existing)
+        }
+        const expanded = items.map(i => expandFallbackItem(i, canvasId, existingItemsById))
+        const result = await putPage(projectID, pageID, { items: expanded }, token)
+        // Drop the saved page into local state so the next Generate's
+        // "Existing lines" listing reflects what was just persisted.
+        this.state.page = result
+        writeTextarea(JSON.stringify(result, null, 2))
+        const saved = expanded.length
+        const noun = `line item${saved === 1 ? '' : 's'}`
+        // Mint `<origin>/transcribe?projectID=…&pageID=…` from the parent
+        // origin (taken from `document.referrer`, which survives the default
+        // `strict-origin-when-cross-origin` policy) and the workspace state,
+        // then top-navigate there to refresh the transcription column.
+        // Writing `top.location.href` is allowed cross-origin under user
+        // activation (the Submit click); when it works the iframe is torn
+        // down. When no origin is resolvable (sandboxed iframe with
+        // `allow-top-navigation` withheld, or strict `no-referrer` policy),
+        // fall back to a manual-refresh hint. The proper postMessage-based
+        // fix lives in TPEN-interfaces#528.
+        const reloadUrl = mintTranscriptionUrl(projectID, pageID)
+        if (reloadUrl) {
+            setFeedback(`Saved ${saved} ${noun}. Refreshing the transcription page…`)
+            // The PUT already succeeded; if the navigation throws (sandbox
+            // without `allow-top-navigation`, or top is cross-origin and
+            // the click's user activation has been consumed by the await
+            // chain above), don't let it surface as a submission failure.
+            try {
+                window.top.location.href = reloadUrl
+                return
+            } catch (err) {
+                console.warn('top.location navigation blocked', err)
+            }
+        }
+        setFeedback(`Saved ${saved} ${noun}. Refresh the transcription page to see the new lines in the column.`, true)
     }
 
     /**
@@ -260,6 +571,7 @@ export class UIManager {
                 return
             }
             if (this.#generateBtn) this.#generateBtn.disabled = true
+            if (this.#fallbackSubmit) this.#fallbackSubmit.disabled = true
             if (this.#workspaceBody) this.#workspaceBody.hidden = true
             return
         }
@@ -267,7 +579,11 @@ export class UIManager {
             this.#authButton.remove()
             this.#authButton = null
         }
-        if (this.#generateBtn) this.#generateBtn.disabled = false
+        const { projectID, pageID } = this.state
+        if (this.#generateBtn) this.#generateBtn.disabled = !pageID
+        if (this.#fallbackSubmit) {
+            this.#fallbackSubmit.disabled = !(projectID && pageID)
+        }
         if (this.#workspaceBody) this.#workspaceBody.hidden = false
     }
 
@@ -304,11 +620,7 @@ export class UIManager {
         try {
             const full = renderTemplate(select.value, {
                 project: s.project, page: s.page, canvas: s.canvas,
-                layer: s.layer, column: s.column, line: s.line,
-                projectID: s.projectID, pageID: s.pageID,
-                layerID: s.layerID, columnID: s.columnID, lineID: s.lineID,
                 token: s.token,
-                projectEndpoint: s.projectID ? projectEndpoint(s.projectID) : null,
                 pageEndpoint: (s.projectID && s.pageID) ? pageEndpoint(s.projectID, s.pageID) : null
             })
             this.#fullPrompt = full
@@ -383,5 +695,22 @@ function labelOf(obj, fallback) {
 function truncateToken(token) {
     if (typeof token !== 'string' || token.length <= 24) return token
     return `${token.slice(0, 10)}…${token.slice(-10)}`
+}
+
+/**
+ * Fallback reload target when the parent didn't forward `parentUrl` via
+ * `TPEN_CONTEXT`. Minted from the parent origin (taken from
+ * `document.referrer`, which survives the default cross-origin
+ * `strict-origin-when-cross-origin` policy) and the tpen3-interfaces
+ * transcription permalink shape (`/transcribe?projectID=…&pageID=…`).
+ * @param {string} projectID
+ * @param {string} pageID
+ * @returns {string|null} the minted URL, or null when no origin is available.
+ */
+function mintTranscriptionUrl(projectID, pageID) {
+    let origin = null
+    try { origin = new URL(document.referrer).origin } catch {}
+    if (!origin) return null
+    return `${origin}/transcribe?projectID=${encodeURIComponent(projectID)}&pageID=${encodeURIComponent(pageID)}`
 }
 

@@ -12,7 +12,7 @@ import { buildTemplateContext } from '../inject-context.js'
 /** @type {import('../../prompt-generator.js').PromptTemplate} */
 export const detectAndTranscribeTemplate = {
     id: 'detect-and-transcribe',
-    label: 'Auto Main Content Detection + Auto Transcription',
+    label: 'Line Detection + Transcription',
     templateUrl: new URL('./PROMPT.md', import.meta.url),
     buildContext: buildTemplateContext
 }

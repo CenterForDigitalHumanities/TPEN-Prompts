@@ -12,7 +12,7 @@ import { buildTemplateContext, formatExistingLines } from '../inject-context.js'
 /** @type {import('../../prompt-generator.js').PromptTemplate} */
 export const transcribeKnownLinesTemplate = {
     id: 'transcribe-known-lines',
-    label: 'Auto Transcribe Existing Lines',
+    label: 'Transcribe Over Existing Lines',
     templateUrl: new URL('./PROMPT.md', import.meta.url),
     buildContext: ctx => ({
         ...buildTemplateContext(ctx),

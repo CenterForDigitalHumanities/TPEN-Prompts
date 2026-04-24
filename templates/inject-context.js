@@ -10,8 +10,7 @@
  * @author thehabes
  */
 
-import { getAgentIRIFromToken } from '../auth.js'
-import { getIRI, trailingId } from '../iiif-ids.js'
+import { getIRI, parseXywh, trailingId } from '../iiif-ids.js'
 
 /**
  * Pull the first image body URL off a IIIF canvas, or null if none is present.
@@ -42,57 +41,76 @@ function canvasDimensions(canvas) {
  * @returns {Record<string, string>}
  */
 export function buildTemplateContext(ctx) {
-    const { canvas, project, projectID, pageID, projectEndpoint, pageEndpoint, token } = ctx
+    const { canvas, page, pageEndpoint, token } = ctx
     const canvasId = getIRI(canvas) ?? '(unknown canvas id)'
     const imageUrl = extractImageUrl(canvas) ?? '(no image body found on canvas)'
     const { width, height } = canvasDimensions(canvas)
     const canvasWidth = width != null ? String(width) : '(unknown)'
     const canvasHeight = height != null ? String(height) : '(unknown)'
-    const dims = (width && height) ? `${width} × ${height}` : 'unknown (use the IIIF Image API info.json)'
-    const projectManifest = Array.isArray(project?.manifest) ? project.manifest[0] : project?.manifest
-    const manifestUri = getIRI(canvas?.partOf) ?? getIRI(projectManifest) ?? '(unknown manifest URI)'
-    const userAgentURI = getAgentIRIFromToken(token) ?? '(unable to resolve agent IRI from token)'
+    const lineCount = Array.isArray(page?.items) ? page.items.length : 0
     return {
-        projectID: projectID ?? '',
-        pageID: pageID ?? '',
         canvasId,
         imageUrl,
         canvasWidth,
         canvasHeight,
-        dims,
-        manifestUri,
-        userAgentURI,
-        projectEndpoint: projectEndpoint ?? '(unknown project endpoint)',
+        lineCount: String(lineCount),
         pageEndpoint: pageEndpoint ?? '(unknown page endpoint)',
         token: token ?? ''
     }
 }
 
 /**
- * Extract an `xywh=x,y,w,h` fragment from a line annotation's target, accepting
- * both `target.selector.value` and a plain `"source#xywh=..."` string target.
- * Strips the non-standard `pixel:` prefix introduced by Annotorious — prompts
- * and any annotations produced downstream must use plain integer coordinates.
- * @param {any} item
- * @returns {string|null}
+ * Summarize a line's body for the "Existing lines" listing.
+ *
+ * Three forms, chosen to keep the listing compact while still letting PUT
+ * consumers reconstruct an existing body verbatim (the services API replaces
+ * `body` with `[]` when a PUT item omits it):
+ *
+ * - `body=[]` — empty body; echo as `[]`.
+ * - `text="…"` — single plain-text `TextualBody`; echo as
+ *   `[{ "type": "TextualBody", "value": <that text>, "format": "text/plain" }]`.
+ *   The common case, so it's worth the shorter display.
+ * - `body=<JSON>` — anything else; echo the JSON verbatim.
+ *
+ * Existing TPEN line bodies are expected to always carry `type`, `value`, and
+ * `format`. The `text=` round-trip reconstruction sets `format: "text/plain"`,
+ * so `only.format === 'text/plain'` is a strict match — any other shape (no
+ * format, different format, multiple bodies, non-`TextualBody`) drops to
+ * `body=<JSON>` to preserve fidelity on the PUT echo.
+ * @param {any} body an annotation `body` value.
+ * @returns {string}
  */
-function extractXywh(item) {
-    const sel = item?.target?.selector
-    const selValue = Array.isArray(sel) ? sel[0]?.value : sel?.value
-    let raw = null
-    if (typeof selValue === 'string' && selValue.includes('xywh=')) {
-        raw = selValue.slice(selValue.indexOf('xywh='))
-    } else {
-        const target = typeof item?.target === 'string' ? item.target : null
-        if (target && target.includes('#xywh=')) raw = target.slice(target.indexOf('xywh='))
+function formatBody(body) {
+    if (!Array.isArray(body) || body.length === 0) return 'body=[]'
+    if (body.length === 1) {
+        const only = body[0]
+        // Require EXACTLY {type, value, format} with the expected values so the
+        // `text=` → `[{type, value, format}]` round-trip is lossless. Any extra
+        // field (e.g. `language`, `creator`, `id`) would be silently dropped on
+        // the PUT echo and trigger a needless RERUM re-version.
+        const keys = only && typeof only === 'object' ? Object.keys(only) : []
+        const isPlainTextual =
+            keys.length === 3
+            && keys.every(k => k === 'type' || k === 'value' || k === 'format')
+            && only.type === 'TextualBody'
+            && typeof only.value === 'string'
+            && only.format === 'text/plain'
+        if (isPlainTextual) return `text=${JSON.stringify(only.value)}`
     }
-    return raw ? raw.replace(/^xywh=pixel:/, 'xywh=') : null
+    return `body=${JSON.stringify(body)}`
 }
 
 /**
  * Render the current line annotations on a page as a markdown bullet list
- * keyed by trailing line id and xywh selector. Pre-resolving this list in the
- * parent saves the LLM a GET + parse round trip.
+ * carrying the fields needed to echo each line back in a page PUT without
+ * losing data. Pre-resolving this list in the parent saves the LLM a GET +
+ * parse round trip. Column POSTs require the full URI to match
+ * `page.items[].id` server-side; PATCH-line-text consumers can split the
+ * URI's trailing segment themselves.
+ *
+ * Each entry exposes the body as one of three forms — `body=[]`, `text="…"`,
+ * or `body=<JSON>` — consumed by the `detect-columns` and
+ * `transcribe-known-lines` prompts, which document how to reconstruct each.
  * @param {any} fetchedPage the page object returned by `fetchPageResolved`.
  * @returns {string}
  */
@@ -102,30 +120,29 @@ export function formatExistingLines(fetchedPage) {
         return '- (No existing lines on this page.)'
     }
     return items.map(item => {
-        const lineId = trailingId(item) ?? '(unknown)'
-        const xywh = extractXywh(item) ?? '(no xywh selector)'
-        return `- ${lineId}: ${xywh}`
+        const lineUri = getIRI(item) ?? '(unknown)'
+        const xywh = parseXywh(item?.target) ?? '(no xywh selector)'
+        return `- ${lineUri} | ${xywh} | ${formatBody(item?.body)}`
     }).join('\n')
 }
 
 /**
  * Render the current column state for a given page as a markdown bullet list.
- * Used by templates that must avoid duplicate column labels. The directly
- * fetched `page` is authoritative when supplied, since the project graph may
- * not hydrate `layer.pages[].columns` for every page.
+ * Used by templates that must avoid duplicate column labels. Columns live on
+ * `project.layers[].pages[]`; the `/resolved` page endpoint does not emit
+ * them, so the project graph is the only source.
  * @param {any} project the TPEN project object.
- * @param {string|null|undefined} pageID the short page id or full page IRI.
- * @param {any} [fetchedPage] the page object returned by `fetchPageResolved`, preferred when available.
+ * @param {any} page the page object returned by `fetchPageResolved`.
  * @returns {string}
  */
-export function formatExistingColumns(project, pageID, fetchedPage = null) {
-    const tail = trailingId(pageID)
+export function formatExistingColumns(project, page) {
+    const tail = trailingId(page)
     const projectPage = (project?.layers ?? [])
         .flatMap(l => l.pages ?? [])
         .find(pg => trailingId(pg) === tail)
-    const cols = fetchedPage?.columns ?? projectPage?.columns ?? []
-    if (!Array.isArray(cols) || cols.length === 0) {
+    const cols = projectPage?.columns ?? []
+    if (cols.length === 0) {
         return '- (No existing columns on this page — labels must be unique when created.)'
     }
-    return cols.map(c => `- ${c.label ?? '(unlabeled)'}: ${(c.lines ?? c.annotations ?? []).length} line(s)`).join('\n')
+    return cols.map(c => `- ${c.label ?? '(unlabeled)'}`).join('\n')
 }

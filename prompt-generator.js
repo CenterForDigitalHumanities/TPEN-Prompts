@@ -14,6 +14,7 @@ import { detectColumnsTemplate } from './templates/detect-columns/index.js'
 import { detectLinesTemplate } from './templates/detect-lines/index.js'
 import { detectColumnsAndLinesTemplate } from './templates/detect-columns-and-lines/index.js'
 import { detectAndTranscribeTemplate } from './templates/detect-and-transcribe/index.js'
+import { detectOrderAndTranscribeTemplate } from './templates/detect-order-and-transcribe/index.js'
 
 /**
  * @typedef {object} PromptTemplate
@@ -42,6 +43,7 @@ register(detectColumnsTemplate)
 register(detectLinesTemplate)
 register(detectColumnsAndLinesTemplate)
 register(detectAndTranscribeTemplate)
+register(detectOrderAndTranscribeTemplate)
 
 /**
  * Fetch every registered template's markdown body once and cache it. Must be
