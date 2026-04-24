@@ -15,11 +15,11 @@ import { CONFIG } from './config.js'
  * @param {string} method HTTP verb (`GET`, `PUT`, `POST`, `PATCH`).
  * @param {any} [body] JSON-serializable body; omitted for GET.
  * @param {string} token JWT.
- * @returns {Promise<any>} parsed JSON body (or `null` when the response has no body).
+ * @returns {Promise<any>} parsed JSON body.
  */
-async function serviceRequest(path, method, body, token) {
+async function tpenServiceRequest(path, method, body, token) {
     if (!token) throw new Error(`Missing auth token for ${path}`)
-    const init = {
+    const options = {
         method,
         headers: {
             'Content-Type': 'application/json',
@@ -27,8 +27,8 @@ async function serviceRequest(path, method, body, token) {
         },
         signal: AbortSignal.timeout(15000)
     }
-    if (body !== undefined) init.body = JSON.stringify(body)
-    const res = await fetch(`${CONFIG.servicesURL}${path}`, init)
+    if (body !== undefined) options.body = JSON.stringify(options.body)
+    const res = await fetch(`${CONFIG.servicesURL}${path}`, options)
     if (!res.ok) {
         // TPEN services always emit JSON errors (see tpen3-services
         // utilities/shared.js#respondWithError and utilities/routeErrorHandler.js).
@@ -38,9 +38,7 @@ async function serviceRequest(path, method, body, token) {
         err.status = res.status
         throw err
     }
-    const text = await res.text()
-    if (!text) return null
-    return JSON.parse(text)
+    return res.json()
 }
 
 /**
@@ -50,7 +48,7 @@ async function serviceRequest(path, method, body, token) {
  * @returns {Promise<any>} parsed JSON body.
  */
 function authedGet(path, token) {
-    return serviceRequest(path, 'GET', undefined, token)
+    return tpenServiceRequest(path, 'GET', undefined, token)
 }
 
 /**
@@ -92,7 +90,7 @@ export function fetchPageResolved(projectID, pageID, token) {
  * @returns {Promise<any>}
  */
 export function putPage(projectID, pageID, body, token) {
-    return serviceRequest(
+    return tpenServiceRequest(
         `/project/${encodeURIComponent(projectID)}/page/${encodeURIComponent(pageID)}`,
         'PUT', body, token
     )
