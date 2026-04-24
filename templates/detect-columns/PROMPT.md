@@ -9,10 +9,6 @@ You are assisting with TPEN manuscript transcription. This task rebuilds the col
 - Image: {{imageUrl}}
 - Page endpoint: {{pageEndpoint}}
 
-## Existing columns on this page
-
-{{existingColumns}}
-
 ## Existing lines
 
 Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates, printed in the page's current order. Use the full annotation URI verbatim when assigning lines to columns and when echoing lines in the page PUT. Compare the current order against the reading-order sequence you compute in step 5 to decide whether the PUT in step 8 is necessary.
@@ -50,7 +46,7 @@ Use only tools already available in your environment. Do not install packages, l
 5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center.
 6. DELETE every existing column on the page (see TPEN API below). On any non-2xx, stop and report. Do not POST or PUT after a DELETE failure.
 7. For each detected column, POST `{ label, annotations }` where `annotations` is the contiguous slice of the reading-order id sequence from step 5 that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any other label chosen in this run. On any non-2xx, stop and report — columns POSTed before the failure remain persisted.
-8. Compare your step-5 reading-order sequence to "Existing lines" position-by-position — they differ if any index holds a different annotation URI. If they match exactly, skip the PUT. Otherwise, PUT the page with `items` in the step-5 order. Each entry re-uses the existing annotation URI verbatim as its `id`, its `body` reconstructed from the entry's body form, and its `target` rebuilt from the entry's `xywh` selector. The server remaps column references when URIs change, but echoing `body` and `target` verbatim avoids minting unnecessary RERUM versions. On any non-2xx, stop and report.
+8. Compare the step-5 sequence against the "Existing lines" order index-by-index. If they are identical, skip the PUT. Otherwise, PUT the page with `items` in the step-5 order. Each entry re-uses the existing annotation URI verbatim as its `id`, its `body` reconstructed from the entry's body form, and its `target` rebuilt from the entry's `xywh` selector. The server remaps column references when URIs change, but echoing `body` and `target` verbatim avoids minting unnecessary RERUM versions. On any non-2xx, stop and report.
 9. Report: columns deleted, columns created, whether the page order was updated, and per-column line counts.
 
 ## Rules
@@ -107,8 +103,7 @@ Content-Type: application/json
           "conformsTo": "http://www.w3.org/TR/media-frags/",
           "value": "xywh=x,y,w,h"
         }
-      },
-      "motivation": "transcribing"
+      }
     }
   ]
 }

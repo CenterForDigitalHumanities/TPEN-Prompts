@@ -34,7 +34,10 @@ async function tpenServiceRequest(path, method, body, token) {
         // utilities/shared.js#respondWithError and utilities/routeErrorHandler.js).
         const detail = await res.json().catch(() => ({}))
         const msg = detail.message ?? detail.error ?? res.statusText
-        const err = new Error(`${path}: ${msg}`)
+        // Prefix with the status so callers that surface `err.message` raw
+        // (e.g., main.js#loadContext) still show it; the numeric status is
+        // also preserved on `err.status` for programmatic handling.
+        const err = new Error(`${res.status} ${path}: ${msg}`)
         err.status = res.status
         throw err
     }

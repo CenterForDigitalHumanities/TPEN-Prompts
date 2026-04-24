@@ -136,10 +136,14 @@ function expandFallbackItem(item, canvasId, existingItemsById) {
  *    `page.items = []` even when `itemsProvided` is false, erasing every line
  *    reference on the page and leaving columns pointing at stale ids. Prompts
  *    should stop and report "no lines" rather than emit an empty payload.
- * 2. A known-line update (string `id`) carrying neither `text` nor `body`
- *    would pass the expander and then be PUT with `body` absent, causing the
- *    services API to overwrite the existing body with `[]` on save
- *    (Line.js#saveLineToRerum: `body: this.body ?? []`).
+ * 2. A known-line update (string `id`) without usable transcription content
+ *    would be PUT with `body` absent or empty, causing the services API to
+ *    overwrite the existing body with `[]` on save
+ *    (Line.js#saveLineToRerum: `body: this.body ?? []`). `'body' in item` is
+ *    not enough — `body: null`, `body: ""`, `body: {}` all collapse to `[]`
+ *    via the `??` fallback. Require either a `text` string or a non-empty
+ *    `body` array; reject any other `body` shape outright so a buggy paste
+ *    can't slip through and silently truncate a line.
  * @param {Array<any>} items
  * @returns {string|null}
  */
@@ -159,8 +163,15 @@ function validateItems(items) {
         if ('text' in item && typeof item.text !== 'string') {
             return 'Each item `text` must be a string.'
         }
-        if (typeof item.id === 'string' && !('text' in item) && !('body' in item)) {
-            return `Item for ${item.id} is missing both \`text\` and \`body\` — would erase the existing transcription.`
+        if ('body' in item && item.body !== undefined && !Array.isArray(item.body)) {
+            return 'Each item `body` must be an array of body entries.'
+        }
+        if (typeof item.id === 'string') {
+            const hasText = typeof item.text === 'string'
+            const hasBody = Array.isArray(item.body) && item.body.length > 0
+            if (!hasText && !hasBody) {
+                return `Item for ${item.id} is missing transcription content (\`text\` string or non-empty \`body\` array) — would erase the existing transcription.`
+            }
         }
     }
     return null
@@ -185,8 +196,6 @@ export class UIManager {
     #workspaceBody = null
     /** Pending timer for clearing the Copy feedback message. */
     #feedbackTimer = null
-    /** Pending timer for clearing the fallback panel feedback message. */
-    #fallbackFeedbackTimer = null
     /** Fallback-panel submit button; toggled by `updateToken`. */
     #fallbackSubmit = null
 
@@ -369,6 +378,11 @@ export class UIManager {
      * below is belt-and-suspenders against a stale reference being clicked
      * programmatically. `updateToken` still flips it when the token arrives
      * after the panel was built so the pageID gate remains authoritative.
+     *
+     * The auto-clear timer for the feedback span lives in this closure, not
+     * on the instance — `renderWorkspace` rebuilds the panel on every render,
+     * and an instance-level timer reference would let an old panel's pending
+     * timer null out a new panel's timer slot.
      * @returns {HTMLElement}
      */
     #buildFallbackPanel() {
@@ -387,7 +401,12 @@ export class UIManager {
         })
         this.#fallbackSubmit = submit
         const feedback = el('span', { class: 'feedback', attrs: { 'aria-live': 'polite' } })
-        submit.addEventListener('click', () => this.#onFallbackSubmit(textarea, submit, feedback))
+        let feedbackTimer = null
+        submit.addEventListener('click', () => this.#onFallbackSubmit({
+            textarea, button: submit, feedback,
+            getTimer: () => feedbackTimer,
+            setTimer: (t) => { feedbackTimer = t }
+        }))
         const children = [
             el('summary', { text: `Couldn't Use the API? Paste JSON from LLM here` }),
             el('p', { class: 'hint', text: 'Use this when your chat LLM produced the JSON payload but could not call the TPEN API itself. This tool will submit it using the token you authorized.' })
@@ -400,11 +419,9 @@ export class UIManager {
     /**
      * Parse the pasted JSON and submit it as a page PUT. Only one shape is
      * accepted: `{ items: [...] }` — the shape every prompt fallback emits.
-     * @param {HTMLTextAreaElement} textarea
-     * @param {HTMLButtonElement} button
-     * @param {HTMLElement} feedback
+     * @param {{textarea: HTMLTextAreaElement, button: HTMLButtonElement, feedback: HTMLElement, getTimer: () => any, setTimer: (t: any) => void}} ctx
      */
-    async #onFallbackSubmit(textarea, button, feedback) {
+    async #onFallbackSubmit({ textarea, button, feedback, getTimer, setTimer }) {
         const { projectID, pageID, token } = this.state
         const raw = textarea.value.trim()
         // `renderWorkspace` can re-run mid-submit (e.g., token changes via
@@ -416,15 +433,18 @@ export class UIManager {
         const setFeedback = (msg, autoClear = false) => {
             if (!alive()) return
             feedback.textContent = msg
-            if (this.#fallbackFeedbackTimer) {
-                clearTimeout(this.#fallbackFeedbackTimer)
-                this.#fallbackFeedbackTimer = null
+            const existing = getTimer()
+            if (existing) {
+                clearTimeout(existing)
+                setTimer(null)
             }
             if (autoClear) {
-                this.#fallbackFeedbackTimer = setTimeout(() => {
+                const t = setTimeout(() => {
+                    if (getTimer() !== t) return
                     feedback.textContent = ''
-                    this.#fallbackFeedbackTimer = null
+                    setTimer(null)
                 }, 3000)
+                setTimer(t)
             }
         }
         if (!projectID || !pageID || !token) {
@@ -449,8 +469,7 @@ export class UIManager {
             }
             setFeedback('Unrecognized payload shape — expected `{ "items": [...] }`.')
         } catch (err) {
-            const status = err?.status ? `TPEN API ${err.status}: ` : ''
-            setFeedback(`${status}${err?.message ?? 'Submission failed.'}`)
+            setFeedback(err?.message ?? 'Submission failed.')
         } finally {
             if (button.isConnected) {
                 button.disabled = !(this.state.projectID && this.state.pageID && this.state.token)

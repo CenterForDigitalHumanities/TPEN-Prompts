@@ -35,8 +35,9 @@ Use only tools already available in your environment. Do not install packages, l
    - `pixel_h = round(canvas_h * img_h / {{canvasHeight}})`
    Crop each line region and verify it visibly contains a single line of inked text.
 2. Run handwriting text recognition over each crop. Apply the recognition rules below.
-3. If HTTP PATCH is available, PATCH the text to each line's line-text endpoint — one PATCH per line in the "Existing lines" list. On any non-2xx, record the status and continue with the remaining lines. If HTTP PATCH is unavailable from the start, go directly to the fallback.
-4. Report counts (lines updated, lines flagged illegible, lines failed) and which path was used.
+3. If HTTP PATCH is available, PATCH the text to each line's line-text endpoint — one PATCH per line in the "Existing lines" list. On any non-2xx, record the status and continue with the remaining lines. If every PATCH returned non-2xx, treat PATCH as unavailable and proceed to step 4. If HTTP PATCH is unavailable from the start, skip directly to step 4.
+4. If you reached this step because PATCH was unavailable or every attempt failed, emit the condensed payload under **Fallback** as the final code block.
+5. Report counts (lines updated, lines flagged illegible, lines failed) and which path was used.
 
 ## Rules
 
