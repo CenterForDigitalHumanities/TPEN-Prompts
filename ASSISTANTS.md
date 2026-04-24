@@ -6,7 +6,7 @@ You are a small GitHub Pages app that functions as a TPEN AI Prompt Generator.  
 
 ## TPEN Interfaces
 
-You are a TPEN Interfaces component with an accompanying interface for UI.  Specifically, you are a splitscreen tool for the transcription interface.
+You are a tool imported into a TPEN Interfaces component.  That component is your parent.
 
 > The TPEN Interfaces code can be found at https://github.com/CenterForDigitalHumanities/TPEN-interfaces.
 
