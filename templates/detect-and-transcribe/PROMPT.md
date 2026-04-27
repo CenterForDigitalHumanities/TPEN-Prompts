@@ -31,7 +31,7 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
-5. If HTTP PUT is available, build the full payload under **TPEN API** — one Annotation per line with the recognized text and `xywh=x,y,w,h` selector — and send the request once. On any non-2xx response, do not retry — fall back.
+5. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, do not retry — fall back.
 6. If HTTP PUT is unavailable (or step 5 fell back), emit the condensed payload under **Fallback** as the final code block.
 7. Report counts (lines saved/in payload, non-empty text, uncertain) and which path was used (direct PUT or fallback).
 8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
