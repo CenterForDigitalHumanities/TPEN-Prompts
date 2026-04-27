@@ -53,7 +53,7 @@ Use only tools already available in your environment. Do not install packages, l
 
 ## TPEN API
 
-Save all lines via a single PUT. The `items` array must contain one annotation per detected line; replace `x,y,w,h` with the integer canvas coordinates computed in step 3.
+Save all detected lines via a single PUT. The `items` array must contain one annotation per detected line, in the global reading-order sequence from step 2; replace `x,y,w,h` with the integer canvas coordinates computed in step 3.
 
 ```
 PUT {{pageEndpoint}}
@@ -119,5 +119,5 @@ Fallback path, report:
 
 - path: `fallback`
 - counts: lines in payload
-- HTTP status and error body if a request was attempted first
+- HTTP status and error body if a PUT was attempted first
 - final code block: the condensed `{ "items": [...] }` JSON for the user to paste
