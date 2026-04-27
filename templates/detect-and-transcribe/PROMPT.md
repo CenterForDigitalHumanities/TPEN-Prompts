@@ -23,7 +23,7 @@ Use only tools already available in your environment. Do not install packages, l
 ## Steps
 
 1. Resolve `img_w`, `img_h`. If `{{imageUrl}}` looks like a IIIF Image API endpoint (path matches `…/{region}/{size}/{rotation}/{quality}.{format}`), strip that suffix to get `{base}`, then GET `{base}/info.json` for the dimensions. For the page-overview pass, fetch a small derivative `{base}/full/1500,/0/default.jpg` and scale measured coordinates back via `source = derivative * info.width / 1500`. If you have precise pixel tooling and want tighter bounds or a clearer crop for transcription, request a region server-side as `{base}/x,y,w,h/max/0/default.jpg` and add the crop's `x,y` origin back before applying the canvas conversion below. Otherwise GET `{{imageUrl}}` once and read dimensions from the bytes.
-2. Detect text lines across the whole page in reading order. This task does not create TPEN columns.
+2. Detect text lines across the whole page in reading order. This task does not create TPEN columns. Then do exactly one self-review pass to tweak line placement — catch missed lines, merge over-splits, split over-merges, tighten loose bounds. One pass only, then move on.
 3. For every line, measure a bounding box in image-pixel space and convert to integer canvas coordinates using:
    - `canvas_x = round(pixel_x * {{canvasWidth}} / img_w)`
    - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
