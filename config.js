@@ -22,25 +22,25 @@ const ACTIVE_ENV = (
     ?? 'prod'
 )
 
-/** @type {Record<string, { servicesURL: string, TPEN3URL: string }>} */
+/** @type {Record<string, { servicesURL: string, TPENINTERFACESURL: string }>} */
 const ENVIRONMENTS = {
     local: {
         servicesURL: 'http://localhost:3012',
-        TPEN3URL: 'http://localhost:4000'
+        TPENINTERFACESURL: 'http://localhost:4000'
     },
     dev: {
         servicesURL: 'https://dev.api.t-pen.org',
-        TPEN3URL: 'http://localhost:4000'
+        TPENINTERFACESURL: 'http://localhost:4000'
     },
     prod: {
         servicesURL: 'https://api.t-pen.org',
-        TPEN3URL: 'https://app.t-pen.org'
+        TPENINTERFACESURL: 'https://app.t-pen.org'
     }
 }
 
 /**
  * Active config for this page load, flattened for convenient destructuring.
- * @type {{ env: string, servicesURL: string, TPEN3URL: string }}
+ * @type {{ env: string, servicesURL: string, TPENINTERFACESURL: string }}
  */
 export const CONFIG = {
     env: ACTIVE_ENV,
