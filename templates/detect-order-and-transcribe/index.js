@@ -2,7 +2,7 @@
  * @file Template: "Detect columns + lines + transcribe → PUT page, POST columns".
  *
  * Combines the multi-block reading-order and column creation from
- * detect-columns-and-lines with the handwriting recognition from
+ * detect-columns-and-lines with the text recognition from
  * detect-and-transcribe.
  *
  * @author thehabes

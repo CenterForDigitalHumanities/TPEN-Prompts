@@ -30,7 +30,7 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
-4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
+4. Run text recognition (print or handwriting) on each line's crop. Apply the recognition rules below.
 5. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it.
 6. If HTTP PUT is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT.
 7. Report counts (lines saved/in payload, non-empty text, uncertain) and which path was used (direct PUT or fallback).
@@ -40,14 +40,14 @@ Use only tools already available in your environment. Do not install packages, l
 
 ### Detection (IMAGE_ANALYSIS)
 
-- Bounds MUST be saved as integer coordinates in canvas space. No percent, no `pixel:` prefix on the selector value.
+- Bounds MUST be saved as integer coordinates in canvas space. No percents. No `percent:` or `pixel:` prefix on the selector value.
 - Preserve reading order across the whole page.
 - Prefer tight bounds when you can measure them; best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
 - Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
-- Completion beats refusal: approximate bounds on most lines are more useful than nothing — this data will be reviewed and corrected downstream.
+- Completion beats refusal: approximate bounds on most lines are more useful than nothing — this data will be reviewed and corrected by humans downstream.
 - Zero lines detected is an unprocessable outcome. Stop and report — do not PUT, do not emit a fallback payload. An empty `items` array would erase every existing annotation on the page.
 
-### Recognition (HANDWRITING_TEXT_RECOGNITION)
+### Recognition (TEXT_RECOGNITION)
 
 - Prioritize diplomatic transcription over normalization.
 - Preserve orthography and punctuation as observed.

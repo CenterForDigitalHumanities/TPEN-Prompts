@@ -34,8 +34,8 @@ Use only tools already available in your environment. Do not install packages, l
    - `pixel_w = round(canvas_w * img_w / {{canvasWidth}})`
    - `pixel_h = round(canvas_h * img_h / {{canvasHeight}})`
    Crop each line region and verify it visibly contains a single line of inked text.
-2. Run handwriting text recognition over each crop. Apply the recognition rules below.
-3. If HTTP PATCH is available, PATCH the text to each line's line-text endpoint — one PATCH per line in the "Existing lines" list. On any non-2xx, record the status and continue with the remaining lines. If every PATCH returned non-2xx, stop and report the per-line statuses — do not emit a fallback payload; the same token and content would be re-submitted through it.
+2. Run text recognition (print or handwriting) over each crop. Apply the recognition rules below.
+3. If HTTP PATCH is available, PATCH the text to each line's line-text endpoint — one PATCH per line in the "Existing lines" list. `<lineId>` is the trailing path segment of the annotation URI listed above (the last `/`-separated segment). On any non-2xx, record the status and continue with the remaining lines. If every PATCH returned non-2xx, stop and report the per-line statuses — do not emit a fallback payload; the same token and content would be re-submitted through it.
 4. If HTTP PATCH is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PATCH.
 5. Report counts (lines updated, lines flagged illegible, lines failed) and which path was used.
 
@@ -49,7 +49,7 @@ Use only tools already available in your environment. Do not install packages, l
 
 ## TPEN API
 
-Update one line's text via PATCH with a plain-text body. `<lineId>` is the trailing path segment of the annotation URI listed above (the last `/`-separated segment).
+Update one line's text via PATCH with a plain-text body.
 
 ```
 PATCH {{pageEndpoint}}/line/<lineId>/text
