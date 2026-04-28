@@ -1,5 +1,5 @@
 /**
- * @file Template: "Transcribe existing lines → PATCH line text".
+ * @file Template: "Transcribe existing lines → page PUT".
  *
  * Targets workflow #1 from the absorbed cubap `_tools/COMMON_TASKS.md`:
  * Text Recognition Within Known Bounds.

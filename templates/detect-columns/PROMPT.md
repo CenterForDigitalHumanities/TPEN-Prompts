@@ -40,7 +40,7 @@ Use only tools already available in your environment. Do not install packages, l
 5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center.
 6. DELETE every existing column on the page (see TPEN API below). On any non-2xx, stop and report. Do not POST or PUT after a DELETE failure.
 7. For each detected column, POST `{ label, annotations }` where `annotations` is the contiguous slice of the reading-order id sequence from step 5 that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any other label chosen in this run. On any non-2xx, stop and report — columns POSTed before the failure remain persisted. Run step 7 before step 8.
-8. Compare the step-5 sequence against the "Existing lines" order index-by-index. If they are identical, skip the PUT. Otherwise, PUT the page with `items` in the step-5 order. Each entry re-uses the existing annotation URI verbatim as its `id`, its `body` reconstructed from the entry's body form, and its `target` rebuilt from the entry's `xywh` selector. On any non-2xx, stop and report.
+8. Compare the step-5 sequence against the "Existing lines" order index-by-index. If they are identical, skip the PUT. Otherwise, PUT the page with `items` in the step-5 order. Each entry re-uses the existing annotation URI verbatim as its `id`, its `body` reconstructed from the entry's body form, and its `target` rebuilt from the entry's `xywh` selector — echoing verbatim avoids minting a needless new RERUM version of the line. On any non-2xx, stop and report.
 9. Report: columns deleted, columns created, whether the page order was updated, and per-column line counts.
 
 ## Rules
@@ -51,7 +51,6 @@ Use only tools already available in your environment. Do not install packages, l
 - Column labels must be unique within this run. The DELETE in step 6 clears every existing column, so no pre-existing label can collide.
 - Each existing line belongs to exactly one column.
 - Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
-- Echo each line's existing `body` and `target` unchanged in the PUT. Changing either mints a new RERUM version of the line; the server remaps columns to the new URIs, but echoing verbatim avoids the needless version.
 
 ## TPEN API
 

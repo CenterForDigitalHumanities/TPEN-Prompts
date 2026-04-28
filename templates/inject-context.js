@@ -72,31 +72,41 @@ export function buildTemplateContext(ctx) {
  *   The common case, so it's worth the shorter display.
  * - `body=<JSON>` — anything else; echo the JSON verbatim.
  *
- * Existing TPEN line bodies are expected to always carry `type`, `value`, and
- * `format`. The `text=` round-trip reconstruction sets `format: "text/plain"`,
- * so `only.format === 'text/plain'` is a strict match — any other shape (no
- * format, different format, multiple bodies, non-`TextualBody`) drops to
- * `body=<JSON>` to preserve fidelity on the PUT echo.
+ * Bodies arrive in several shapes: empty (`null`/`undefined`/`""`/`[]`), an
+ * array of body entries, or a single body object (not wrapped). The unwrapped
+ * shape comes from `Line.updateText` after a PATCH: it sets
+ * `this.body = { type, value, format, language }` directly, so PATCHed lines
+ * round-trip through RERUM as `{type, value, format}` and would otherwise be
+ * misread as empty.
+ *
+ * The `text=` round-trip reconstruction sets `format: "text/plain"`, so
+ * `format === 'text/plain'` is a strict match — any other shape (no format,
+ * different format, multiple bodies, non-`TextualBody`) drops to `body=<JSON>`
+ * to preserve fidelity on the PUT echo.
  * @param {any} body an annotation `body` value.
  * @returns {string}
  */
 function formatBody(body) {
-    if (!Array.isArray(body) || body.length === 0) return 'body=[]'
-    if (body.length === 1) {
-        const only = body[0]
-        // Require EXACTLY {type, value, format} with the expected values so the
-        // `text=` → `[{type, value, format}]` round-trip is lossless. Any extra
-        // field (e.g. `language`, `creator`, `id`) would be silently dropped on
-        // the PUT echo and trigger a needless RERUM re-version.
-        const keys = only && typeof only === 'object' ? Object.keys(only) : []
-        const isPlainTextual =
-            keys.length === 3
+    if (body === null || body === undefined || body === '') return 'body=[]'
+    // Require EXACTLY {type, value, format} with the expected values so the
+    // `text=` → `[{type, value, format}]` round-trip is lossless. Any extra
+    // field (e.g. `language`, `creator`, `id`) would be silently dropped on
+    // the PUT echo and trigger a needless RERUM re-version.
+    const isPlainTextual = (entry) => {
+        const keys = entry && typeof entry === 'object' && !Array.isArray(entry)
+            ? Object.keys(entry) : []
+        return keys.length === 3
             && keys.every(k => k === 'type' || k === 'value' || k === 'format')
-            && only.type === 'TextualBody'
-            && typeof only.value === 'string'
-            && only.format === 'text/plain'
-        if (isPlainTextual) return `text=${JSON.stringify(only.value)}`
+            && entry.type === 'TextualBody'
+            && typeof entry.value === 'string'
+            && entry.format === 'text/plain'
     }
+    if (Array.isArray(body)) {
+        if (body.length === 0) return 'body=[]'
+        if (body.length === 1 && isPlainTextual(body[0])) return `text=${JSON.stringify(body[0].value)}`
+        return `body=${JSON.stringify(body)}`
+    }
+    if (isPlainTextual(body)) return `text=${JSON.stringify(body.value)}`
     return `body=${JSON.stringify(body)}`
 }
 

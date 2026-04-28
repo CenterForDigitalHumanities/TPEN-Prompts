@@ -33,8 +33,7 @@ Use only tools already available in your environment. Do not install packages, l
 4. Run text recognition (print or handwriting) on each line's crop. Apply the recognition rules below.
 5. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it.
 6. If HTTP PUT is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT.
-7. Report counts (lines saved/in payload, non-empty text, uncertain) and which path was used (direct PUT or fallback).
-8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
+7. Report counts (lines saved/in payload, non-empty text, uncertain), which path was used (direct PUT or fallback), and notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
 
 ## Rules
 

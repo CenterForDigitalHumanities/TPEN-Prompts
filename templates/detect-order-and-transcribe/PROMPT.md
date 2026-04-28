@@ -33,8 +33,7 @@ Use only tools already available in your environment. Do not install packages, l
 4. Run text recognition (print or handwriting) on each line's crop. Apply the recognition rules below.
 5. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once in the global reading-order sequence from step 2. If the PUT returns non-2xx, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The PUT response's `items` array is guaranteed to be in the same order as the submitted items, so use each line's column index from step 2 to slice the returned ids. Labels must be unique within this run. If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
 6. If HTTP PUT or POST is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT.
-7. Report counts (lines saved/in payload, non-empty text, uncertain, columns created/in payload) and which path was used (direct or fallback).
-8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
+7. Report counts (lines saved/in payload, non-empty text, uncertain, columns created/in payload), which path was used (direct or fallback), and notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
 
 ## Rules
 
