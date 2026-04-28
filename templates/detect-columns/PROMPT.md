@@ -11,19 +11,13 @@ You are assisting with TPEN manuscript transcription. This task rebuilds the col
 
 ## Existing lines
 
-Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates, printed in the page's current order. Use the full annotation URI verbatim when assigning lines to columns and when echoing lines in the page PUT. Compare the current order against the reading-order sequence you compute in step 5 to decide whether the PUT in step 8 is necessary.
-
-The body form is one of:
-
-- `body=[]` — echo as `[]`.
-- `text="<value>"` — echo as `[{ "type": "TextualBody", "value": <that value>, "format": "text/plain" }]`.
-- `body=<JSON>` — echo the JSON verbatim.
+Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates, in the page's current order. Use the URI verbatim when assigning lines to columns and when echoing lines in the page PUT. Echo each body form verbatim: `body=[]` → `[]`; `text="<value>"` → `[{ "type": "TextualBody", "value": <value>, "format": "text/plain" }]` (paste `<value>` as-is — already a JSON string literal, do not re-quote or re-escape); `body=<JSON>` → the JSON verbatim. Compare the current order against the reading-order sequence from step 5 to decide whether the PUT in step 8 is necessary.
 
 {{existingLines}}
 
 ## Preconditions
 
-All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions, existing-line list) are provided above. This task operates on an existing line set: `lineCount` = `{{lineCount}}`. If `lineCount` is `0`, stop immediately and return a failure report — this task cannot create lines.
+All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions, existing-line list) are provided above. This template only groups existing lines: `lineCount` = `{{lineCount}}`. If `lineCount` is `0`, stop immediately and report — this prompt must not create lines.
 
 You must have:
 
@@ -41,12 +35,12 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
-   Then clamp to the canvas (`0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`).
+   Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. For each detected column, determine which of the existing line ids (from the list above) belong to it. Assign a line to the column whose canvas-space region contains the center point of the line's `xywh`. If a line's center falls outside every detected column, assign it to the nearest column by Euclidean distance from the center point to the column's region (distance `0` when the point is inside). Each line belongs to exactly one column.
 5. Build a global reading-order sequence of all existing line ids: columns in reading order; within each column, lines sorted top-to-bottom by the `xywh` y-center.
 6. DELETE every existing column on the page (see TPEN API below). On any non-2xx, stop and report. Do not POST or PUT after a DELETE failure.
-7. For each detected column, POST `{ label, annotations }` where `annotations` is the contiguous slice of the reading-order id sequence from step 5 that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any other label chosen in this run. On any non-2xx, stop and report — columns POSTed before the failure remain persisted.
-8. Compare the step-5 sequence against the "Existing lines" order index-by-index. If they are identical, skip the PUT. Otherwise, PUT the page with `items` in the step-5 order. Each entry re-uses the existing annotation URI verbatim as its `id`, its `body` reconstructed from the entry's body form, and its `target` rebuilt from the entry's `xywh` selector. The server remaps column references when URIs change, but echoing `body` and `target` verbatim avoids minting unnecessary RERUM versions. On any non-2xx, stop and report.
+7. For each detected column, POST `{ label, annotations }` where `annotations` is the contiguous slice of the reading-order id sequence from step 5 that belongs to that column. Choose a unique label per column (e.g., `Column A`, `Column B`) that does not clash with any other label chosen in this run. On any non-2xx, stop and report — columns POSTed before the failure remain persisted. Run step 7 before step 8.
+8. Compare the step-5 sequence against the "Existing lines" order index-by-index. If they are identical, skip the PUT. Otherwise, PUT the page with `items` in the step-5 order. Each entry re-uses the existing annotation URI verbatim as its `id`, its `body` reconstructed from the entry's body form, and its `target` rebuilt from the entry's `xywh` selector — echoing verbatim avoids minting a needless new RERUM version of the line. On any non-2xx, stop and report.
 9. Report: columns deleted, columns created, whether the page order was updated, and per-column line counts.
 
 ## Rules
@@ -56,12 +50,11 @@ Use only tools already available in your environment. Do not install packages, l
 - Keep column boundaries tight enough that each line clearly belongs to one column, but generous enough to avoid clipping existing line selectors.
 - Column labels must be unique within this run. The DELETE in step 6 clears every existing column, so no pre-existing label can collide.
 - Each existing line belongs to exactly one column.
-- Do not POST a column with an empty `annotations` array — the server rejects it. If a detected column would end up with zero assigned lines, merge its assignments into the nearest populated column instead.
-- Echo each line's existing `body` and `target` unchanged in the PUT. Changing either mints a new RERUM version of the line; the server remaps columns to the new URIs, but echoing verbatim avoids the needless version.
+- Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
 
 ## TPEN API
 
-First, delete all existing columns on the page. Expect `204 No Content` on success (including when the page had no columns):
+First, delete all existing columns on the page:
 
 ```
 DELETE {{pageEndpoint}}/clear-columns

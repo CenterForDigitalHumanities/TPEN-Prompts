@@ -206,6 +206,8 @@ export class UIManager {
     #feedbackTimer = null
     /** Fallback-panel submit button; toggled by `updateToken`. */
     #fallbackSubmit = null
+    /** Security warning text node; rewritten by `updateToken` when consent arrives. */
+    #warningText = null
 
     /**
      * @param {string} [rootId='app'] id of the element to render into.
@@ -318,9 +320,11 @@ export class UIManager {
             if (k === 'Line') this.#lineMetaValue = dd
         }
 
+        const warningSpan = el('span', { text: warningText(token) })
+        this.#warningText = warningSpan
         const warning = el('div', { class: 'warning', attrs: { role: 'note' } }, [
             el('strong', { text: 'Security: ' }),
-            el('span', { text: `The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust.` })
+            warningSpan
         ])
 
         this.#authButton = null
@@ -579,6 +583,7 @@ export class UIManager {
             this.#authButton.remove()
             this.#authButton = null
         }
+        if (this.#warningText) this.#warningText.textContent = warningText(token)
         const { projectID, pageID } = this.state
         if (this.#generateBtn) this.#generateBtn.disabled = !pageID
         if (this.#fallbackSubmit) {
@@ -695,6 +700,19 @@ function labelOf(obj, fallback) {
 function truncateToken(token) {
     if (typeof token !== 'string' || token.length <= 24) return token
     return `${token.slice(0, 10)}…${token.slice(-10)}`
+}
+
+/**
+ * Pick the security-warning body for the given token state. Pre-consent the
+ * warning explains what consent will mean; once a token is held it shrinks to
+ * the operative reminders.
+ * @param {string|null|undefined} token
+ * @returns {string}
+ */
+function warningText(token) {
+    return token
+        ? `Only paste the prompt into LLM environments you trust. You can log out of TPEN to invalidate a leaked token.`
+        : `The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste the prompt into LLM environments you trust. You can log out of TPEN to invalidate a leaked token.`
 }
 
 /**

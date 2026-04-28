@@ -7,15 +7,12 @@
  * @author thehabes
  */
 
-import { buildTemplateContext, formatExistingColumns } from '../inject-context.js'
+import { buildTemplateContext } from '../inject-context.js'
 
 /** @type {import('../../prompt-generator.js').PromptTemplate} */
 export const detectColumnsAndLinesTemplate = {
     id: 'detect-columns-and-lines',
     label: 'Line Detection + Column Grouping',
     templateUrl: new URL('./PROMPT.md', import.meta.url),
-    buildContext: (ctx) => ({
-        ...buildTemplateContext(ctx),
-        existingColumns: formatExistingColumns(ctx.project, ctx.page)
-    })
+    buildContext: buildTemplateContext
 }
