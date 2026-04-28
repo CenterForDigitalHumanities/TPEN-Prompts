@@ -8,7 +8,7 @@
  * the parent replies with `TPEN_ID_TOKEN`.
  *
  * Replies are aimed at `parentOrigin`, captured from the first inbound
- * message; before any inbound arrives, `CONFIG.TPENINTERFACESURL` is used
+ * message; before any inbound arrives, `CONFIG.interfacesURL` is used
  * as the default target.
  *
  * @author thehabes
@@ -57,14 +57,14 @@ export class MessageHandler {
     /**
      * Post a message to the parent frame. Replies target the origin of the
      * first inbound message; before any inbound arrives we fall back to
-     * `CONFIG.TPENINTERFACESURL` (the expected production parent). No-op
-     * when the parent is the page itself.
+     * `CONFIG.interfacesURL` (the expected production parent). No-op when
+     * the parent is the page itself.
      * @param {object} message
      * @returns {boolean} true when a parent frame exists and the post was dispatched.
      */
     #postToParent(message) {
         if (window.parent === window) return false
-        const targetOrigin = this.parentOrigin ?? CONFIG.TPENINTERFACESURL
+        const targetOrigin = this.parentOrigin ?? CONFIG.interfacesURL
         window.parent.postMessage(message, targetOrigin)
         return true
     }

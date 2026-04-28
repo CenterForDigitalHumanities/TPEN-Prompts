@@ -40,8 +40,8 @@ Use only tools already available in your environment. Do not install packages, l
 
 ### Detection (IMAGE_ANALYSIS)
 
-- Bounds MUST be saved as integer coordinates in canvas space. No percents. No `percent:` or `pixel:` prefix on the selector value.
-- Column labels must be unique within this run.
+- Bounds MUST be saved as integer coordinates in canvas space. No percentage-based selectors. No `percent:` or `pixel:` prefix on the selector value.
+- Column labels must be unique within this run. The server rejects labels matching any pre-existing column.
 - Each line annotation belongs to at most one column.
 - Preserve reading order across columns and within each column.
 - Line geometry is the primary accuracy target. Column grouping is secondary — for a single-column page, one column containing every line is correct.

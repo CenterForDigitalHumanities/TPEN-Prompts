@@ -40,7 +40,7 @@ Use only tools already available in your environment. Do not install packages, l
 
 ### Detection (IMAGE_ANALYSIS)
 
-- Bounds MUST be saved as integer coordinates in canvas space. No percents. No `percent:` or `pixel:` prefix on the selector value.
+- Bounds MUST be saved as integer coordinates in canvas space. No percentage-based selectors. No `percent:` or `pixel:` prefix on the selector value.
 - Preserve reading order across the whole page.
 - Prefer tight bounds when you can measure them; best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
 - Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
