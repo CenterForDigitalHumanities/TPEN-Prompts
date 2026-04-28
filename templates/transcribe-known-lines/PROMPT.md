@@ -44,7 +44,12 @@ Use only tools already available in your environment. Do not install packages, l
 - Prioritize diplomatic transcription over normalization. Preserve orthography and punctuation as observed.
 - Use explicit uncertainty markers for unclear glyphs (for example `[a?]`). Do not force certainty.
 - Do not invent expansions. If an abbreviation mark is present, transcribe the mark; do not silently expand.
-- Confidence ladder per line: confident reading → existing text from "Existing lines" (echo the prior `text=` or `body=` value verbatim) → `body: []` (direct) / `"text": ""` (fallback), only when the line was already empty (`body=[]`). Do not fabricate text. Report any line that fell back to existing text or to empty. Do not drop the item in either path: the direct PUT treats omitted line ids as deletions and updates columns to remove them.
+- Confidence ladder per line: 
+  1. Confident reading can overwrite existing line text.
+  2. Unconfident reading uses "Existing lines" (echo the prior `text=` or `body=` value verbatim).
+  3. `body: []` (direct) / `"text": ""` (fallback), only if the line was already empty (`body=[]`). Do not fabricate text. Report any line that fell back to existing text or to empty. 
+
+> Do not drop the item in either path: the direct PUT treats omitted line ids as deletions and updates columns to remove them.
 
 ## TPEN API
 
