@@ -320,7 +320,7 @@ export class UIManager {
 
         const warning = el('div', { class: 'warning', attrs: { role: 'note' } }, [
             el('strong', { text: 'Security: ' }),
-            el('span', { text: `The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust.` })
+            el('span', { text: `The generated prompt carries your TPEN session token so an agentic LLM can manipulate your TPEN data on your behalf. Clicking 'Copy' writes the full token to your clipboard. Only paste it into LLM environments you trust. If the token leaks, log out of TPEN to invalidate it.` })
         ])
 
         this.#authButton = null

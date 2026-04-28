@@ -11,13 +11,7 @@ You are assisting with TPEN manuscript transcription. This task rebuilds the col
 
 ## Existing lines
 
-Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates, printed in the page's current order. Use the full annotation URI verbatim when assigning lines to columns and when echoing lines in the page PUT. Compare the current order against the reading-order sequence you compute in step 5 to decide whether the PUT in step 8 is necessary.
-
-The body form is one of:
-
-- `body=[]` — echo as `[]`.
-- `text="<value>"` — `<value>` is a JSON string literal (quotes and escapes already encoded). Echo as `[{ "type": "TextualBody", "value": <value>, "format": "text/plain" }]` — paste it straight into the `value` slot, do not re-quote or re-escape.
-- `body=<JSON>` — echo the JSON verbatim.
+Each entry is `<annotation-uri> | xywh=<xywh selector> | <body form>` in canvas coordinates, in the page's current order. Use the URI verbatim when assigning lines to columns and when echoing lines in the page PUT. Echo each body form verbatim: `body=[]` → `[]`; `text="<value>"` → `[{ "type": "TextualBody", "value": <value>, "format": "text/plain" }]` (paste `<value>` as-is — already a JSON string literal, do not re-quote or re-escape); `body=<JSON>` → the JSON verbatim. Compare the current order against the reading-order sequence from step 5 to decide whether the PUT in step 8 is necessary.
 
 {{existingLines}}
 

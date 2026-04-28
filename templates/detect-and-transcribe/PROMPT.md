@@ -31,8 +31,8 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
-5. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, do not retry — fall back.
-6. If HTTP PUT is unavailable (or step 5 fell back), emit the condensed payload under **Fallback** as the final code block.
+5. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it.
+6. If HTTP PUT is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT.
 7. Report counts (lines saved/in payload, non-empty text, uncertain) and which path was used (direct PUT or fallback).
 8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
 
@@ -86,7 +86,7 @@ Content-Type: application/json
 
 ## Fallback
 
-When the direct PUT is impossible or returns non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON (no comments, no placeholders — substitute the real coordinates and recognized text).
+When HTTP PUT is unavailable from the start, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON (no comments, no placeholders — substitute the real coordinates and recognized text).
 
 ```
 {
@@ -111,6 +111,5 @@ Fallback path, report:
 
 - path: `fallback`
 - counts: lines in payload, lines with non-empty text, lines flagged uncertain
-- HTTP status and error body if a PUT was attempted first
 - notable ambiguities worth a human review
 - final code block: the condensed `{ "items": [...] }` JSON for the user to paste

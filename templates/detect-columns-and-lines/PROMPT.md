@@ -34,8 +34,8 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
-4. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once in the global reading-order sequence from step 2. If the PUT returns non-2xx, stop and fall back — lines are not persisted yet. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The PUT response's `items` array is guaranteed to be in the same order as the submitted items, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
-5. If the PUT in step 4 failed, emit the condensed payload under **Fallback** as the final code block. Column creation is out of scope for the fallback path.
+4. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once in the global reading-order sequence from step 2. If the PUT returns non-2xx, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The PUT response's `items` array is guaranteed to be in the same order as the submitted items, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
+5. If HTTP PUT or POST is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT. Column creation is out of scope for the fallback path.
 6. Report counts (lines saved/in payload, columns created/in payload) and which path was used (direct or fallback).
 
 ## Rules
@@ -94,7 +94,7 @@ Content-Type: application/json
 
 ## Fallback
 
-When the direct path is unavailable or returns non-2xx, emit the condensed payload below as the final code block of your report, in the global reading-order sequence from step 2. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON. Column creation is out of scope for this fallback.
+When HTTP PUT or POST is unavailable from the start, emit the condensed payload below as the final code block of your report, in the global reading-order sequence from step 2. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON. Column creation is out of scope for this fallback.
 
 ```
 {
@@ -119,5 +119,4 @@ Fallback path, report:
 
 - path: `fallback`
 - counts: lines in payload
-- HTTP status and error body if a PUT was attempted first
 - final code block: the condensed `{ "items": [...] }` JSON for the user to paste

@@ -30,8 +30,8 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
-4. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, do not retry — fall back.
-5. If HTTP PUT is unavailable (or step 4 fell back), emit the condensed payload under **Fallback** as the final code block.
+4. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it.
+5. If HTTP PUT is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT.
 6. Report count and which path was used (direct PUT or fallback).
 
 ## Rules
@@ -73,7 +73,7 @@ Content-Type: application/json
 
 ## Fallback
 
-When the direct PUT is impossible or returns non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON (no comments, no placeholders — substitute the real coordinates).
+When HTTP PUT is unavailable from the start, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON (no comments, no placeholders — substitute the real coordinates).
 
 ```
 {
@@ -97,5 +97,4 @@ Fallback path, report:
 
 - path: `fallback`
 - count: number of line annotations in the payload
-- HTTP status and error body if a PUT was attempted first
 - final code block: the condensed `{ "items": [...] }` JSON for the user to paste

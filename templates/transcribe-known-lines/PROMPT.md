@@ -36,7 +36,7 @@ Use only tools already available in your environment. Do not install packages, l
    Crop each line region and verify it visibly contains a single line of inked text.
 2. Run handwriting text recognition over each crop. Apply the recognition rules below.
 3. If HTTP PATCH is available, PATCH the text to each line's line-text endpoint — one PATCH per line in the "Existing lines" list. On any non-2xx, record the status and continue with the remaining lines. If every PATCH returned non-2xx, stop and report the per-line statuses — do not emit a fallback payload; the same token and content would be re-submitted through it.
-4. If HTTP PATCH is unavailable from the start, emit the condensed payload under **Fallback** as the final code block.
+4. If HTTP PATCH is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PATCH.
 5. Report counts (lines updated, lines flagged illegible, lines failed) and which path was used.
 
 ## Rules
@@ -61,7 +61,7 @@ Content-Type: text/plain
 
 ## Fallback
 
-The fallback tool only accepts JSON, so it uses a single page-level PUT instead of per-line PATCH. When PATCH is unavailable or every attempt returned non-2xx, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool re-uses each line's existing target from the hydrated page context before PUTting it — the item's `id` must match an entry in "Existing lines" above.
+The fallback tool only accepts JSON, so it uses a single page-level PUT instead of per-line PATCH. When PATCH is unavailable from the start, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool re-uses each line's existing target from the hydrated page context before PUTting it — the item's `id` must match an entry in "Existing lines" above.
 
 ```
 {
@@ -85,5 +85,4 @@ Fallback path, report:
 
 - path: `fallback`
 - counts: lines in payload, lines flagged illegible
-- HTTP status and error body if a PATCH was attempted first
 - final code block: the condensed `{ "items": [...] }` JSON for the user to paste
