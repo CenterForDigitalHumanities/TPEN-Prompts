@@ -9,10 +9,6 @@ You are assisting with TPEN manuscript transcription. Perform the task end-to-en
 - Image: {{imageUrl}}
 - Page endpoint: {{pageEndpoint}}
 
-## Existing columns on this page
-
-{{existingColumns}}
-
 ## Preconditions
 
 All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dimensions) are provided above. This template only creates new lines: `lineCount` = `{{lineCount}}`. If `lineCount` is not `0`, stop immediately and report — existing line data must not be modified.
@@ -35,7 +31,7 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. Run handwriting text recognition on each line's crop. Apply the recognition rules below.
-5. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once in the global reading-order sequence from step 2. If the PUT returns non-2xx, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The PUT response's `items` array is guaranteed to be in the same order as the submitted items, so use each line's column index from step 2 to slice the returned ids. Labels must be unique and must not clash with anything in "Existing columns on this page". If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
+5. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once in the global reading-order sequence from step 2. If the PUT returns non-2xx, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The PUT response's `items` array is guaranteed to be in the same order as the submitted items, so use each line's column index from step 2 to slice the returned ids. Labels must be unique within this run. If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
 6. If HTTP PUT or POST is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT. Column creation is out of scope for the fallback path.
 7. Report counts (lines saved/in payload, non-empty text, uncertain, columns created/in payload) and which path was used (direct or fallback).
 8. Report notable ambiguities (e.g., illegible lines transcribed as empty or flagged).
@@ -45,7 +41,7 @@ Use only tools already available in your environment. Do not install packages, l
 ### Detection (IMAGE_ANALYSIS)
 
 - Bounds MUST be saved as integer coordinates in canvas space. No percent, no `pixel:` prefix on the selector value.
-- Column labels are page-scoped and must be unique. Do not duplicate an existing column label.
+- Column labels must be unique within this run.
 - Each line annotation belongs to at most one column.
 - Preserve reading order across columns and within each column.
 - Line geometry is the primary accuracy target. Column grouping is secondary — for a single-column page, one column containing every line is correct.

@@ -4,13 +4,13 @@
  * Every template consumes a superset of flat `{{name}}` variables produced by
  * `buildTemplateContext`. Individual templates only reference the subset they
  * need in their PROMPT.md body — unused keys simply don't render. Templates
- * that need richer context (e.g. existing column listings) spread this result
- * and layer their own keys on top.
+ * that need richer context (e.g. an `existingLines` listing) spread this
+ * result and layer their own keys on top.
  *
  * @author thehabes
  */
 
-import { getIRI, parseXywh, trailingId } from '../iiif-ids.js'
+import { getIRI, parseXywh } from '../iiif-ids.js'
 
 /**
  * Pull the first image body URL off a IIIF canvas, or null if none is present.
@@ -124,25 +124,4 @@ export function formatExistingLines(fetchedPage) {
         const xywh = parseXywh(item?.target) ?? '(no xywh selector)'
         return `- ${lineUri} | ${xywh} | ${formatBody(item?.body)}`
     }).join('\n')
-}
-
-/**
- * Render the current column state for a given page as a markdown bullet list.
- * Used by templates that must avoid duplicate column labels. Columns live on
- * `project.layers[].pages[]`; the `/resolved` page endpoint does not emit
- * them, so the project graph is the only source.
- * @param {any} project the TPEN project object.
- * @param {any} page the page object returned by `fetchPageResolved`.
- * @returns {string}
- */
-export function formatExistingColumns(project, page) {
-    const tail = trailingId(page)
-    const projectPage = (project?.layers ?? [])
-        .flatMap(l => l.pages ?? [])
-        .find(pg => trailingId(pg) === tail)
-    const cols = projectPage?.columns ?? []
-    if (cols.length === 0) {
-        return '- (No existing columns on this page)'
-    }
-    return cols.map(c => `- ${c.label ?? '(unlabeled)'}`).join('\n')
 }
