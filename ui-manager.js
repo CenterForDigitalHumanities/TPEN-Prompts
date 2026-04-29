@@ -245,7 +245,7 @@ function validatePayload(payload) {
                 return `\`columns[${colIdx}].items\` repeats index ${idx}.`
             }
             if (seenIndices.has(idx)) {
-                return `Index ${idx} appears in more than one column — each line belongs to at most one column.`
+                return `Index ${idx} appears in more than one column — each line must appear in exactly one column.`
             }
             indicesInThisColumn.add(idx)
             seenIndices.add(idx)
@@ -583,8 +583,8 @@ export class UIManager {
      *
      * Column POSTs run sequentially after the PUT. On a column failure the
      * iframe stays put so the user can read the error before deciding whether
-     * to retry — navigating away would saved-but-half-columned the page out
-     * of sight.
+     * to retry — navigating away would push the saved-but-half-columned page
+     * out of sight.
      * @param {{ items: Array<any>, columns: Array<{label:string, items:number[]}>|null }} payload
      * @param {{projectID:string,pageID:string,token:string,setFeedback:Function,writeTextarea:Function}} opts
      */
@@ -620,7 +620,7 @@ export class UIManager {
             for (const col of columns) {
                 const annotations = col.items.map(idx => getIRI(result.items?.[idx])).filter(Boolean)
                 if (annotations.length !== col.items.length) {
-                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: PUT response was missing line ids for one or more indices.`)
+                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: PUT response was missing line ids for one or more indices. Lines are persisted — add the remaining column(s) via the TPEN UI; do not re-paste this payload (would duplicate lines).`)
                     return
                 }
                 try {
@@ -628,7 +628,7 @@ export class UIManager {
                     created++
                 } catch (err) {
                     const detail = err?.message ?? 'unknown error'
-                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: ${detail}. Re-generate the prompt to retry.`)
+                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: ${detail}. Lines are persisted — add the remaining column(s) via the TPEN UI; do not re-paste this payload.`)
                     return
                 }
             }
