@@ -104,6 +104,24 @@ export function putPage(projectID, pageID, body, token) {
 }
 
 /**
+ * POST a new column to a page (`/project/{pid}/page/{pgid}/column`). Server
+ * (page/index.js) validates: `label` non-empty, unique within the page;
+ * `annotations` non-empty; every annotation id must already exist on the page.
+ * Returns 201 with the created column record.
+ * @param {string} projectID
+ * @param {string} pageID
+ * @param {{ label: string, annotations: string[] }} body
+ * @param {string} token
+ * @returns {Promise<any>}
+ */
+export function postColumn(projectID, pageID, body, token) {
+    return tpenServiceRequest(
+        `/project/${encodeURIComponent(projectID)}/page/${encodeURIComponent(pageID)}/column`,
+        'POST', body, token
+    )
+}
+
+/**
  * Build the page endpoint URL (page/index.js). Templates use this for PUT/PATCH
  * operations that target the page or its sub-resources (lines, columns).
  * @param {string} projectID
