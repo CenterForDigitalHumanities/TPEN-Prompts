@@ -16,7 +16,7 @@ All required inputs (`canvasId`, `token`, `pageEndpoint`, `imageUrl`, canvas dim
 You must have:
 
 1. Ability to fetch the image bytes (or a derivative) and identify line and column bounds from them. Precise pixel measurement is preferred when available; visual estimation from the fetched image is acceptable otherwise.
-2. Either HTTP PUT and POST capability with `Content-Type: application/json`, or the ability to emit the lines-only payload as a fallback JSON code block in your report. If either verb is unavailable, skip straight to the Fallback section — do not retry. Column creation has no fallback; it is dropped when the fallback path is taken.
+2. Either HTTP PUT and POST capability with `Content-Type: application/json`, or the ability to emit the fallback JSON code block (lines and columns) in your report. If either verb is unavailable, skip straight to the Fallback section — do not retry.
 
 Use only tools already available in your environment. Do not install packages, libraries, or system utilities.
 
@@ -31,7 +31,7 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
    Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once in the global reading-order sequence from step 2. If the PUT returns non-2xx, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The PUT response's `items` array is guaranteed to be in the same order as the submitted items, so use each line's column index from step 2 to slice the returned ids. Labels must be unique within this run. If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
-5. If HTTP PUT or POST is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT.
+5. If HTTP PUT or POST is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT. The payload includes both `items` and `columns`; each column lists the indices (into the `items` array, in the global reading-order sequence from step 2) of the lines it contains.
 6. Report counts (lines saved/in payload, columns created/in payload) and which path was used (direct or fallback).
 
 ## Rules
@@ -44,6 +44,7 @@ Use only tools already available in your environment. Do not install packages, l
 - Prefer tight bounds when you can measure them; best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
 - Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
 - Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
+- Every detected line appears in exactly one column. Single-column pages emit one column listing every index in `items`.
 - Completion beats refusal: approximate bounds on most lines are more useful than nothing — this data will be reviewed and corrected by humans downstream.
 - Zero lines detected is an unprocessable outcome. Stop and report — do not PUT, do not POST a column, do not emit a fallback payload. An empty `items` array would erase every existing annotation on the page.
 
@@ -90,17 +91,20 @@ Content-Type: application/json
 
 ## Fallback
 
-When HTTP PUT or POST is unavailable from the start, emit the condensed payload below as the final code block of your report, in the global reading-order sequence from step 2. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON. Column creation is out of scope for this fallback.
+When HTTP PUT or POST is unavailable from the start, emit the condensed payload below as the final code block of your report. The TPEN splitscreen tool expands each item into a full W3C Annotation before PUTting it, then POSTs each column — do not inline the canvas source, selector boilerplate, or motivation. It must be valid JSON.
 
 ```
 {
   "items": [
     { "target": "xywh=x,y,w,h" }
+  ],
+  "columns": [
+    { "label": "Column A", "items": [0] }
   ]
 }
 ```
 
-One item per detected line, in the global reading-order sequence. `target` is the bare selector value (no `#`, no `pixel:` prefix). `body` is omitted because no text is produced by this task.
+One item per detected line, in the global reading-order sequence from step 2. `target` is the bare selector value (no `#`, no `pixel:` prefix). `body` is omitted because no text is produced by this task. Each `columns` entry's `items` array lists the indices (into the top-level `items`) of the lines in that column; labels must be unique within the payload, and every index in `[0, items.length)` must appear in exactly one column. Single-column pages emit one column listing every index.
 
 ## Completion
 
@@ -114,5 +118,5 @@ Direct path, report:
 Fallback path, report:
 
 - path: `fallback`
-- counts: lines in payload
-- final code block: the condensed `{ "items": [...] }` JSON for the user to paste
+- counts: lines in payload, columns in payload
+- final code block: the condensed `{ "items": [...], "columns": [...] }` JSON for the user to paste

@@ -9,7 +9,7 @@
  */
 
 import { listTemplates, renderTemplate } from './prompt-generator.js'
-import { pageEndpoint, putPage } from './tpen-service.js'
+import { pageEndpoint, postColumn, putPage } from './tpen-service.js'
 import { getIRI, parseXywh, trailingId } from './iiif-ids.js'
 
 /**
@@ -183,6 +183,81 @@ function validateItems(items) {
         }
     }
     return null
+}
+
+/**
+ * Validate a fallback payload. Accepts `{ items }` (legacy items-only path)
+ * and `{ items, columns }` (column-creating prompts: detect-columns-and-lines,
+ * detect-order-and-transcribe). Returns `{ items, columns }` on success or a
+ * user-facing error string. `columns` is `null` when absent or empty (the
+ * caller skips column POSTs).
+ *
+ * Column rules (enforced before any PUT):
+ * - Each entry: `{ label: non-empty trimmed string, items: non-empty integer[] }`.
+ * - Labels unique within the payload (the server also rejects duplicates against
+ *   pre-existing page columns, but `state.page` may be stale — the partial-failure
+ *   path surfaces server-side collisions).
+ * - Indices are integers in `[0, items.length)`, no repeat within a column,
+ *   no overlap across columns.
+ * - Coverage: every index in `[0, items.length)` appears in exactly one column.
+ *   Single-column pages emit one column listing every index — symmetric with the
+ *   direct path (which always creates at least one column) and lets the consumer
+ *   skip a "did the prompt forget a line?" branch.
+ * @param {any} payload parsed JSON from the fallback textarea.
+ * @returns {{ items: Array<any>, columns: Array<{label:string, items:number[]}>|null } | string}
+ */
+function validatePayload(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return 'Unrecognized payload shape — expected `{ "items": [...] }` or `{ "items": [...], "columns": [...] }`.'
+    }
+    if (!Array.isArray(payload.items)) {
+        return 'Unrecognized payload shape — expected `{ "items": [...] }` or `{ "items": [...], "columns": [...] }`.'
+    }
+    const itemsError = validateItems(payload.items)
+    if (itemsError) return itemsError
+    const rawColumns = payload.columns
+    if (rawColumns === undefined || rawColumns === null) {
+        return { items: payload.items, columns: null }
+    }
+    if (!Array.isArray(rawColumns)) return '`columns` must be an array when present.'
+    if (rawColumns.length === 0) return { items: payload.items, columns: null }
+    const itemCount = payload.items.length
+    const seenIndices = new Set()
+    const seenLabels = new Set()
+    const columns = []
+    for (const [colIdx, col] of rawColumns.entries()) {
+        if (!col || typeof col !== 'object' || Array.isArray(col)) {
+            return `\`columns[${colIdx}]\` must be an object with \`label\` and \`items\`.`
+        }
+        const label = typeof col.label === 'string' ? col.label.trim() : ''
+        if (!label) return `\`columns[${colIdx}].label\` must be a non-empty string.`
+        if (seenLabels.has(label)) return `Duplicate column label "${label}" in payload.`
+        seenLabels.add(label)
+        if (!Array.isArray(col.items) || col.items.length === 0) {
+            return `\`columns[${colIdx}].items\` must be a non-empty array of indices into \`items\`.`
+        }
+        const indicesInThisColumn = new Set()
+        for (const idx of col.items) {
+            if (!Number.isInteger(idx) || idx < 0 || idx >= itemCount) {
+                return `\`columns[${colIdx}].items\` index ${JSON.stringify(idx)} is out of range — must be an integer in [0, ${itemCount}).`
+            }
+            if (indicesInThisColumn.has(idx)) {
+                return `\`columns[${colIdx}].items\` repeats index ${idx}.`
+            }
+            if (seenIndices.has(idx)) {
+                return `Index ${idx} appears in more than one column — each line belongs to at most one column.`
+            }
+            indicesInThisColumn.add(idx)
+            seenIndices.add(idx)
+        }
+        columns.push({ label, items: [...col.items] })
+    }
+    if (seenIndices.size !== itemCount) {
+        const missing = []
+        for (let i = 0; i < itemCount; i++) if (!seenIndices.has(i)) missing.push(i)
+        return `\`columns\` must cover every line — missing index${missing.length === 1 ? '' : 'es'} ${missing.join(', ')}.`
+    }
+    return { items: payload.items, columns }
 }
 
 /**
@@ -411,7 +486,7 @@ export class UIManager {
         const ready = hasPage && Boolean(token)
         const textarea = el('textarea', {
             rows: 10, spellcheck: false, autocomplete: 'off',
-            placeholder: '{ "items": [ { "target": "xywh=10,20,400,30" } ] }',
+            placeholder: '{ "items": [ { "target": "xywh=10,20,400,30" } ], "columns": [ { "label": "Column A", "items": [0] } ] }',
             attrs: { 'aria-label': 'JSON payload to submit to TPEN' }
         })
         const submit = el('button', {
@@ -437,8 +512,10 @@ export class UIManager {
     }
 
     /**
-     * Parse the pasted JSON and submit it as a page PUT. Only one shape is
-     * accepted: `{ items: [...] }` — the shape every prompt fallback emits.
+     * Parse the pasted JSON and submit it as a page PUT (and, when present,
+     * follow up with column POSTs). Accepts `{ items }` (legacy shape) and
+     * `{ items, columns }` (column-creating prompts). See `validatePayload`
+     * for the column rules.
      * @param {{textarea: HTMLTextAreaElement, button: HTMLButtonElement, feedback: HTMLElement, getTimer: () => any, setTimer: (t: any) => void}} ctx
      */
     async #onFallbackSubmit({ textarea, button, feedback, getTimer, setTimer }) {
@@ -479,15 +556,16 @@ export class UIManager {
         try { payload = JSON.parse(raw) }
         catch { setFeedback('Payload must be valid JSON.'); return }
 
+        const validated = validatePayload(payload)
+        if (typeof validated === 'string') {
+            setFeedback(validated)
+            return
+        }
         button.disabled = true
         setFeedback('Submitting…')
         const opts = { projectID, pageID, token, setFeedback, writeTextarea }
         try {
-            if (payload && typeof payload === 'object' && !Array.isArray(payload) && Array.isArray(payload.items)) {
-                await this.#submitItems(payload.items, opts)
-                return
-            }
-            setFeedback('Unrecognized payload shape — expected `{ "items": [...] }`.')
+            await this.#submitItems(validated, opts)
         } catch (err) {
             setFeedback(err?.message ?? 'Submission failed.')
         } finally {
@@ -498,15 +576,19 @@ export class UIManager {
     }
 
     /**
-     * Validate, expand, and PUT an `items` payload. Narrows the PUT body to
-     * just `{ items }` — top-level keys beyond `items` would otherwise be
-     * applied to the page record by the server's property-copy loop.
-     * @param {Array<any>} items
+     * Expand and PUT an `items` payload, then optionally POST one column per
+     * entry in `columns`. Narrows the PUT body to just `{ items }` — top-level
+     * keys beyond `items` would otherwise be applied to the page record by
+     * the server's property-copy loop.
+     *
+     * Column POSTs run sequentially after the PUT. On a column failure the
+     * iframe stays put so the user can read the error before deciding whether
+     * to retry — navigating away would saved-but-half-columned the page out
+     * of sight.
+     * @param {{ items: Array<any>, columns: Array<{label:string, items:number[]}>|null }} payload
      * @param {{projectID:string,pageID:string,token:string,setFeedback:Function,writeTextarea:Function}} opts
      */
-    async #submitItems(items, { projectID, pageID, token, setFeedback, writeTextarea }) {
-        const validationError = validateItems(items)
-        if (validationError) { setFeedback(validationError); return }
+    async #submitItems({ items, columns }, { projectID, pageID, token, setFeedback, writeTextarea }) {
         const canvasId = getIRI(this.state.canvas)
         if (!canvasId) {
             setFeedback('Canvas context missing — reload the workspace and retry.')
@@ -528,7 +610,30 @@ export class UIManager {
         this.state.page = result
         writeTextarea(JSON.stringify(result, null, 2))
         const saved = expanded.length
-        const noun = `line item${saved === 1 ? '' : 's'}`
+        const lineNoun = `line item${saved === 1 ? '' : 's'}`
+
+        if (columns && columns.length) {
+            // PUT response order is server-guaranteed to match submitted order,
+            // so column[i].items indices map straight onto result.items.
+            const total = columns.length
+            let created = 0
+            for (const col of columns) {
+                const annotations = col.items.map(idx => getIRI(result.items?.[idx])).filter(Boolean)
+                if (annotations.length !== col.items.length) {
+                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: PUT response was missing line ids for one or more indices.`)
+                    return
+                }
+                try {
+                    await postColumn(projectID, pageID, { label: col.label, annotations }, token)
+                    created++
+                } catch (err) {
+                    const detail = err?.message ?? 'unknown error'
+                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: ${detail}. Re-generate the prompt to retry.`)
+                    return
+                }
+            }
+        }
+
         // Mint `<origin>/transcribe?projectID=…&pageID=…` from the parent
         // origin (taken from `document.referrer`, which survives the default
         // `strict-origin-when-cross-origin` policy) and the workspace state,
@@ -539,9 +644,13 @@ export class UIManager {
         // `allow-top-navigation` withheld, or strict `no-referrer` policy),
         // fall back to a manual-refresh hint. The proper postMessage-based
         // fix lives in TPEN-interfaces#528.
+        const colCount = columns?.length ?? 0
+        const colSuffix = colCount
+            ? ` and ${colCount} column${colCount === 1 ? '' : 's'}`
+            : ''
         const reloadUrl = mintTranscriptionUrl(projectID, pageID)
         if (reloadUrl) {
-            setFeedback(`Saved ${saved} ${noun}. Refreshing the transcription page…`)
+            setFeedback(`Saved ${saved} ${lineNoun}${colSuffix}. Refreshing the transcription page…`)
             // The PUT already succeeded; if the navigation throws (sandbox
             // without `allow-top-navigation`, or top is cross-origin and
             // the click's user activation has been consumed by the await
@@ -553,7 +662,7 @@ export class UIManager {
                 console.warn('top.location navigation blocked', err)
             }
         }
-        setFeedback(`Saved ${saved} ${noun}. Refresh the transcription page to see the new lines in the column.`, true)
+        setFeedback(`Saved ${saved} ${lineNoun}${colSuffix}. Refresh the transcription page to see the new lines in the column.`, true)
     }
 
     /**
