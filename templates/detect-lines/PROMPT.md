@@ -29,7 +29,7 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
-   Apply a 3 px pad (subtract 3 from `x` and `y`; add 6 to `w` and `h`), then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
+   Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. If HTTP PUT is available, build the full payload under **TPEN API** and send the request once. On any non-2xx response, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it.
 5. If HTTP PUT is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT.
 6. Report count and which path was used (direct PUT or fallback).
@@ -38,7 +38,7 @@ Use only tools already available in your environment. Do not install packages, l
 
 - Bounds MUST be saved as integer coordinates in canvas space. No percentage-based selectors. No `percent:` or `pixel:` prefix on the selector value.
 - Preserve reading order across the whole page.
-- Measure tight bounds, then apply the 3 px pad in step 3 — best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
+- Prefer tight bounds when you can measure them; best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
 - Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
 - Completion beats refusal: approximate bounds on most lines are more useful than nothing — this data will be reviewed and corrected by humans downstream.
 - Zero lines detected is an unprocessable outcome. Stop and report — do not PUT, do not emit a fallback payload. An empty `items` array would erase every existing annotation on the page.

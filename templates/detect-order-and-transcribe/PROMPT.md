@@ -29,7 +29,7 @@ Use only tools already available in your environment. Do not install packages, l
    - `canvas_y = round(pixel_y * {{canvasHeight}} / img_h)`
    - `canvas_w = round(pixel_w * {{canvasWidth}} / img_w)`
    - `canvas_h = round(pixel_h * {{canvasHeight}} / img_h)`
-   Apply a 3 px pad (subtract 3 from `x` and `y`; add 6 to `w` and `h`), then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
+   Then clamp `x,y,w,h` so that `0 ≤ x`, `x + w ≤ {{canvasWidth}}`, `0 ≤ y`, `y + h ≤ {{canvasHeight}}`.
 4. Run text recognition (print or handwriting) on each line's crop. Apply the recognition rules below.
 5. If HTTP PUT and POST are available, build the full payload under **TPEN API** and PUT the items once in the global reading-order sequence from step 2. If the PUT returns non-2xx, stop and report the status and error body — do not emit a fallback payload; the same token and content would be re-submitted through it. If the PUT succeeds, for each column POST `{ label, annotations }` where `annotations` is the contiguous slice of that column's lines from the PUT response. The PUT response's `items` array is guaranteed to be in the same order as the submitted items, so use each line's column index from step 2 to slice the returned ids. Labels must be unique within this run. If a column POST returns non-2xx, stop and report the partial state — do not emit a fallback payload; lines are already saved.
 6. If HTTP PUT or POST is unavailable from the start, emit the condensed payload under **Fallback** as the final code block — do not also attempt PUT. The payload includes both `items` and `columns`; each column lists the indices (into the `items` array, in the global reading-order sequence from step 2) of the lines it contains.
@@ -44,7 +44,7 @@ Use only tools already available in your environment. Do not install packages, l
 - Each line annotation belongs to at most one column.
 - Preserve reading order across columns and within each column.
 - Line geometry is the primary accuracy target. Column grouping is secondary — for a single-column page, one column containing every line is correct.
-- Measure tight bounds, then apply the 3 px pad in step 3 — best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
+- Prefer tight bounds when you can measure them; best-effort bounds are acceptable. When uncertain whether a tall run is one line or several, prefer splitting over merging.
 - Do not include decorative borders, frame rules, ornaments, or illustrations as part of a line.
 - Do not POST a column with an empty `annotations` array — the server rejects it. Skip any detected column that ends up with zero assigned lines.
 - Every detected line appears in exactly one column. Single-column pages emit one column listing every index in `items`.
