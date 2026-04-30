@@ -186,11 +186,9 @@ function validateItems(items) {
 }
 
 /**
- * Validate a fallback payload. Accepts `{ items }` (legacy items-only path)
- * and `{ items, columns }` (column-creating prompts: detect-columns-and-lines,
- * detect-order-and-transcribe). Returns `{ items, columns }` on success or a
- * user-facing error string. `columns` is `null` when absent or empty (the
- * caller skips column POSTs).
+ * Validate a fallback payload. Accepts `{ items }` and `{ items, columns }`
+ * Returns `{ items, columns }` on success or a user-facing error string. 
+ * `columns` is `null` when absent or empty..
  *
  * Column rules (enforced before any PUT):
  * - Each entry: `{ label: non-empty trimmed string, items: non-empty integer[] }`.
@@ -200,9 +198,7 @@ function validateItems(items) {
  * - Indices are integers in `[0, items.length)`, no repeat within a column,
  *   no overlap across columns.
  * - Coverage: every index in `[0, items.length)` appears in exactly one column.
- *   Single-column pages emit one column listing every index — symmetric with the
- *   direct path (which always creates at least one column) and lets the consumer
- *   skip a "did the prompt forget a line?" branch.
+ *
  * @param {any} payload parsed JSON from the fallback textarea.
  * @returns {{ items: Array<any>, columns: Array<{label:string, items:number[]}>|null } | string}
  */
