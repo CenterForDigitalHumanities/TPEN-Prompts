@@ -207,20 +207,14 @@ function validateItems(items) {
  * @returns {{ items: Array<any>, columns: Array<{label:string, items:number[]}>|null } | string}
  */
 function validatePayload(payload) {
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        return 'Unrecognized payload shape — expected `{ "items": [...] }` or `{ "items": [...], "columns": [...] }`.'
-    }
-    if (!Array.isArray(payload.items)) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !Array.isArray(payload.items)) {
         return 'Unrecognized payload shape — expected `{ "items": [...] }` or `{ "items": [...], "columns": [...] }`.'
     }
     const itemsError = validateItems(payload.items)
     if (itemsError) return itemsError
     const rawColumns = payload.columns
-    if (rawColumns === undefined || rawColumns === null) {
-        return { items: payload.items, columns: null }
-    }
-    if (!Array.isArray(rawColumns)) return '`columns` must be an array when present.'
-    if (rawColumns.length === 0) return { items: payload.items, columns: null }
+    if (rawColumns != null && !Array.isArray(rawColumns)) return '`columns` must be an array when present.'
+    if (!rawColumns?.length) return { items: payload.items, columns: null }
     const itemCount = payload.items.length
     const seenIndices = new Set()
     const seenLabels = new Set()
