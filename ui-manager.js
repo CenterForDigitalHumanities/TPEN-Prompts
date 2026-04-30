@@ -620,7 +620,7 @@ export class UIManager {
             for (const col of columns) {
                 const annotations = col.items.map(idx => getIRI(result.items?.[idx])).filter(Boolean)
                 if (annotations.length !== col.items.length) {
-                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: PUT response was missing line ids for one or more indices. Lines are persisted — add the remaining column(s) via the TPEN UI; do not re-paste this payload (would duplicate lines).`)
+                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: PUT response was missing line ids for one or more indices. Lines are persisted — add the remaining column(s) via the TPEN UI. Do not re-paste this payload: a second PUT would replace the saved lines and orphan any column already created.`)
                     return
                 }
                 try {
@@ -628,7 +628,7 @@ export class UIManager {
                     created++
                 } catch (err) {
                     const detail = err?.message ?? 'unknown error'
-                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: ${detail}. Lines are persisted — add the remaining column(s) via the TPEN UI; do not re-paste this payload.`)
+                    setFeedback(`Saved ${saved} ${lineNoun} and ${created} of ${total} columns. Column "${col.label}" failed: ${detail}. Lines are persisted — add the remaining column(s) via the TPEN UI. Do not re-paste this payload: a second PUT would replace the saved lines and orphan any column already created.`)
                     return
                 }
             }
