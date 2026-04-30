@@ -188,7 +188,7 @@ function validateItems(items) {
 /**
  * Validate a fallback payload. Accepts `{ items }` and `{ items, columns }`
  * Returns `{ items, columns }` on success or a user-facing error string. 
- * `columns` is `null` when absent or empty..
+ * `columns` is `null` when absent or empty.
  *
  * Column rules (enforced before any PUT):
  * - Each entry: `{ label: non-empty trimmed string, items: non-empty integer[] }`.
