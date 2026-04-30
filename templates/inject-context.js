@@ -13,14 +13,21 @@
 import { getIRI, parseXywh } from '../iiif-ids.js'
 
 /**
- * Pull the first image body URL off a IIIF canvas, or null if none is present.
+ * Pull the first image URL off a IIIF canvas, or null if none is present.
+ * Handles IIIF Presentation v3 (`canvas.items[0].items[0].body`) and v2
+ * (`canvas.images[0].resource`). For v2, prefer `resource.service['@id']`
+ * (the Image API base) over `resource['@id']` so we don't hand the prompt
+ * a pre-baked derivative URL like `.../full/512,/0/default.jpg`.
  * @param {any} canvas
  * @returns {string|null}
  */
 function extractImageUrl(canvas) {
     let body = canvas?.items?.[0]?.items?.[0]?.body
     if (Array.isArray(body)) body = body[0]
-    return getIRI(body)
+    const v3 = getIRI(body)
+    if (v3) return v3
+    const resource = canvas?.images?.[0]?.resource
+    return getIRI(resource?.service) ?? getIRI(resource)
 }
 
 /**
