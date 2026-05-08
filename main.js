@@ -1,10 +1,12 @@
 /**
  * @file TPEN-Prompts orchestrator.
  *
- * Iframed mode: the parent pushes one `TPEN_CONTEXT` payload on iframe load
- * carrying the fully-hydrated `project`, `page`, and `canvas` objects. The
- * child renders directly from that payload — no REST round-trips, no request/
- * reply handshake. The `TPEN_ID_TOKEN` flow remains user-gated and separate.
+ * Iframed mode: the parent pushes a lean `TPEN_CONTEXT` payload on iframe
+ * load (project identity + URIs only). Prompt templates need fully-hydrated
+ * project/page/canvas objects, so on receipt of `TPEN_CONTEXT` we send
+ * `REQUEST_HYDRATED_CONTEXT` upstream; the parent replies with
+ * `TPEN_HYDRATED_CONTEXT` and the child renders from that payload.
+ * The `TPEN_ID_TOKEN` flow remains user-gated and separate.
  *
  * Standalone mode: reads URL params, fetches project (+ optionally page) from
  * the TPEN services API, resolves layer/column/line from the project graph.
@@ -36,17 +38,18 @@ export class PromptsApp {
 
     /**
      * Bootstrap the app. Iframed: show an awaiting screen and wait for the
-     * parent to push `TPEN_CONTEXT`. Standalone: render the id-entry form
-     * (or load directly when `projectID` is in the URL).
+     * parent to push `TPEN_CONTEXT`, then request `TPEN_HYDRATED_CONTEXT`.
+     * Standalone: render the id-entry form (or load directly when
+     * `projectID` is in the URL).
      * @returns {Promise<void>}
      */
     async init() {
         const iframed = window.parent !== window
 
         // Paint the awaiting screen SYNCHRONOUSLY, before any await. Otherwise
-        // a `TPEN_CONTEXT` message that lands during `await initTemplates()`
-        // renders the workspace, and then this init() continuation silently
-        // overwrites it with the awaiting screen.
+        // a `TPEN_HYDRATED_CONTEXT` message that lands during
+        // `await initTemplates()` renders the workspace, and then this init()
+        // continuation silently overwrites it with the awaiting screen.
         if (iframed) {
             clearStoredToken()
             this.token = null
@@ -55,6 +58,12 @@ export class PromptsApp {
                 showAuthButton: true,
                 onRequestAuth: () => this.messages.requestAuthToken()
             })
+            // Request the hydrated payload eagerly. If the parent has already
+            // sent TPEN_CONTEXT before we wired up the listener, this kicks
+            // off the hydration handshake. If the listener fires first, the
+            // TPEN_CONTEXT branch will also request hydration — duplicate
+            // requests are cheap and idempotent on the parent side.
+            this.messages.requestHydratedContext()
         }
 
         await initTemplates()
@@ -92,11 +101,11 @@ export class PromptsApp {
     }
 
     /**
-     * Accept a `TPEN_CONTEXT` payload from the parent. The payload is expected
-     * to carry hydrated `project`, `page`, and `canvas` objects; anything
-     * missing is resolved here as a safety net — REST fetches for project/page
-     * (auth required), direct HTTP for the canvas via its IIIF id on
-     * `page.target`.
+     * Accept a `TPEN_HYDRATED_CONTEXT` payload from the parent. The payload
+     * is expected to carry hydrated `project`, `page`, and `canvas` objects;
+     * anything missing is resolved here as a safety net — REST fetches for
+     * project/page (auth required), direct HTTP for the canvas via its IIIF
+     * id on `page.target`.
      * @param {{ project: any, page: any, canvas: any, currentLineId: string|null }} payload
      */
     async acceptContext(payload) {
