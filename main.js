@@ -58,12 +58,6 @@ export class PromptsApp {
                 showAuthButton: true,
                 onRequestAuth: () => this.messages.requestAuthToken()
             })
-            // Request the hydrated payload eagerly. If the parent has already
-            // sent TPEN_CONTEXT before we wired up the listener, this kicks
-            // off the hydration handshake. If the listener fires first, the
-            // TPEN_CONTEXT branch will also request hydration — duplicate
-            // requests are cheap and idempotent on the parent side.
-            this.messages.requestHydratedContext()
         }
 
         await initTemplates()
