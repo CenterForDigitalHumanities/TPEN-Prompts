@@ -1,18 +1,10 @@
 /**
  * @file postMessage consumer for the transcription parent frame.
  *
- * The parent pushes a lean `TPEN_CONTEXT` payload (project identity + URIs
- * only) unprompted on iframe load. TPEN-Prompts needs the fully-populated
- * project and page for prompt-template rendering, so on boot it sends
- * `REQUEST_POPULATED_PROJECT` and `REQUEST_POPULATED_PAGE`. The parent
- * answers with `TPEN_POPULATED_PROJECT` and `TPEN_POPULATED_PAGE`; both
- * replies are accumulated, and once both have arrived we hand the bundle
- * to `app.acceptContext`.
- *
- * Line navigation arrives as `UPDATE_CURRENT_LINE` deltas. The token is
- * separate and user-gated: clicking the consent button sends
- * `REQUEST_TPEN_ID_TOKEN` upstream, and the parent replies with
- * `TPEN_ID_TOKEN`.
+ * Routes inbound messages from the TPEN parent into the `PromptsApp`
+ * orchestrator. The parent's lean `TPEN_CONTEXT` boot payload triggers a
+ * follow-up request for the populated project + page pair (which the
+ * prompt templates need); other messages are straight pass-through.
  *
  * Replies are aimed at `parentOrigin`, captured from the first inbound
  * message; before any inbound arrives, `CONFIG.interfacesURL` is used

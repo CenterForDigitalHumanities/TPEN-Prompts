@@ -38,19 +38,15 @@ export class PromptsApp {
     }
 
     /**
-     * Bootstrap the app. Iframed: show an awaiting screen and wait for the
-     * parent to push `TPEN_CONTEXT`, then request the populated project/page
-     * pair. Standalone: render the id-entry form (or load directly when
-     * `projectID` is in the URL).
+     * Bootstrap the app.
      * @returns {Promise<void>}
      */
     async init() {
         const iframed = window.parent !== window
 
-        // Paint the awaiting screen SYNCHRONOUSLY, before any await. Otherwise
-        // a populated-bundle flush that lands during `await initTemplates()`
-        // renders the workspace, and then this init() continuation silently
-        // overwrites it with the awaiting screen.
+        // Paint synchronously before initTemplates() awaits — otherwise a
+        // populated-bundle flush that lands during the await silently
+        // overwrites this paint when init() resumes.
         if (iframed) {
             clearStoredToken()
             this.token = null
