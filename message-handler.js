@@ -77,14 +77,14 @@ export class MessageHandler {
 
     /**
      * Hand the accumulated populated bundle to `acceptContext` once both the
-     * project and page replies have arrived. Resets the `has*` flags so a
-     * subsequent re-request flows through the same gate cleanly.
+     * project and page replies have arrived. Fully resets the accumulator so
+     * a subsequent re-request can't surface a stale field if the gate is ever
+     * loosened.
      */
     #flushPopulatedIfReady() {
         if (!this.populated.hasProject || !this.populated.hasPage) return
         const { project, page, canvas, currentLineId } = this.populated
-        this.populated.hasProject = false
-        this.populated.hasPage = false
+        this.populated = { project: null, page: null, canvas: null, currentLineId: null, hasProject: false, hasPage: false }
         this.app.acceptContext({ project, page, canvas, currentLineId })
             .catch(err => console.error('acceptContext failed', err))
     }
