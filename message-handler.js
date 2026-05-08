@@ -1,11 +1,10 @@
 /**
  * @file postMessage consumer for the transcription parent frame.
  *
- * The parent pushes `TPEN_CONTEXT` unprompted on iframe load, carrying the
- * hydrated `project`, `page`, and `canvas` objects. Line navigation arrives
- * as `UPDATE_CURRENT_LINE` deltas. The token is separate and user-gated:
- * clicking the consent button sends `REQUEST_TPEN_ID_TOKEN` upstream, and
- * the parent replies with `TPEN_ID_TOKEN`.
+ * Routes inbound messages from the TPEN parent into the `PromptsApp`
+ * orchestrator. The parent's lean `TPEN_CONTEXT` boot payload triggers a
+ * follow-up request for the populated project + page pair (which the
+ * prompt templates need); other messages are straight pass-through.
  *
  * Replies are aimed at `parentOrigin`, captured from the first inbound
  * message; before any inbound arrives, `CONFIG.interfacesURL` is used
@@ -28,6 +27,14 @@ export class MessageHandler {
         this.app = app
         /** Origin of the first inbound message; used as targetOrigin for replies. */
         this.parentOrigin = null
+        /**
+         * Accumulator for the two-part populated reply bundle. Filled by the
+         * `TPEN_POPULATED_PROJECT` and `TPEN_POPULATED_PAGE` cases; once
+         * both halves are present we hand the bundle to `acceptContext` and
+         * clear it. Re-fills overwrite the previous value (the parent is
+         * authoritative on each new request).
+         */
+        this.populated = { project: null, page: null, canvas: null, currentLineId: null, hasProject: false, hasPage: false }
         window.addEventListener('message', (event) => this.handle(event))
     }
 
@@ -44,7 +51,21 @@ export class MessageHandler {
                 this.app.acceptAuth({ token: data.idToken ?? null })
                 break
             case 'TPEN_CONTEXT':
-                this.app.acceptContext(data).catch(err => console.error('acceptContext failed', err))
+                // Lean payload (project identity + URIs). Templates wait for
+                // the populated reply pair, so we just request both here.
+                this.requestPopulatedContext()
+                break
+            case 'TPEN_POPULATED_PROJECT':
+                this.populated.project = data.project ?? null
+                this.populated.hasProject = true
+                this.#flushPopulatedIfReady()
+                break
+            case 'TPEN_POPULATED_PAGE':
+                this.populated.page = data.page ?? null
+                this.populated.canvas = data.canvas ?? null
+                this.populated.currentLineId = data.currentLineId ?? null
+                this.populated.hasPage = true
+                this.#flushPopulatedIfReady()
                 break
             case 'UPDATE_CURRENT_LINE':
                 this.app.updateCurrentLine(data.currentLineId ?? null)
@@ -52,6 +73,20 @@ export class MessageHandler {
             default:
                 break
         }
+    }
+
+    /**
+     * Hand the accumulated populated bundle to `acceptContext` once both the
+     * project and page replies have arrived. Fully resets the accumulator so
+     * a subsequent re-request can't surface a stale field if the gate is ever
+     * loosened.
+     */
+    #flushPopulatedIfReady() {
+        if (!this.populated.hasProject || !this.populated.hasPage) return
+        const { project, page, canvas, currentLineId } = this.populated
+        this.populated = { project: null, page: null, canvas: null, currentLineId: null, hasProject: false, hasPage: false }
+        this.app.acceptContext({ project, page, canvas, currentLineId })
+            .catch(err => console.error('acceptContext failed', err))
     }
 
     /**
@@ -71,4 +106,14 @@ export class MessageHandler {
 
     /** Ask the parent frame to send `TPEN_ID_TOKEN`. */
     requestAuthToken() { return this.#postToParent({ type: 'REQUEST_TPEN_ID_TOKEN' }) }
+
+    /**
+     * Ask the parent frame to send the populated project + page pair. The
+     * project carries the full graph (layers/pages/columns/members); the
+     * page carries items hydrated to full Annotations plus the canvas.
+     */
+    requestPopulatedContext() {
+        this.#postToParent({ type: 'REQUEST_POPULATED_PROJECT' })
+        this.#postToParent({ type: 'REQUEST_POPULATED_PAGE' })
+    }
 }
