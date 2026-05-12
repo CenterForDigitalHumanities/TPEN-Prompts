@@ -1,41 +1,26 @@
 # TPEN-Prompts
 
-A small GitHub Pages web app that composes well-formatted prompts for TPEN manuscript transcription workflows.
+A small GitHub Pages web app that composes copy-ready prompts for TPEN manuscript transcription workflows (line detection, column detection, transcription, etc.). The app substitutes TPEN project context into a chosen prompt template and emits prompt text — it does not call any LLM or write to TPEN on your behalf. Every generated prompt carries two paths: a direct `## TPEN API` block and a `## Fallback` block, so the same prompt works whether the LLM you hand it to can make HTTP calls or not.
 
-**What it does:** Generate copy-ready prompts for LLMs working on TPEN tasks (line detection, column detection, transcription, etc.). The app carries project context and emits prompt text only—it does not call any LLM or make saves on your behalf.
-
-## Quick Start
+## Quick start
 
 - **Try it online:** [TPEN-Prompts](https://centerfordigitalhumanities.github.io/TPEN-Prompts/)
-- **Add a template:** See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to create or modify prompts
-- **Report an issue:** Open a GitHub issue with template name and expected vs. actual output
+- **Contribute or add a prompt template:** see [CONTRIBUTING.md](./CONTRIBUTING.md)
+- **Report an issue:** [open a GitHub issue](https://github.com/CenterForDigitalHumanities/TPEN-Prompts/issues/new) with the prompt template name and expected vs. actual output
 
-## Key Resources
+## Two ways to use a generated prompt
 
-| Resource | Purpose |
-|----------|---------|
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute, add templates, test locally |
-| [LICENSE](./LICENSE.md) | MIT License |
-| [`templates/`](./templates/) | Prompt template modules (one folder per task) |
-| [`tools/`](./tools/) | Generic markdown guidance (API, data formats, workflows) |
+Pick a prompt template in the UI, click **Copy** on the *Generated prompt* output, then hand the prompt to an LLM in one of two ways:
 
-## How It Works
+- **CLI or agent LLM with HTTP access** (e.g. Claude Code, an API-calling agent). The LLM follows the prompt's `## TPEN API` section and PUTs the result to TPEN directly. Nothing else to do in the app.
+- **Chat LLM** (e.g. ChatGPT, Claude.ai). The LLM follows the prompt's `## Fallback` section and returns JSON. Paste that JSON into the app's *Couldn't Use the API? Paste JSON from LLM here* panel and the app performs the PUT.
 
-1. Select a **template** from the dropdown (e.g., "Line Detection").
-2. The app resolves TPEN project context (canvas, dimensions, endpoint).
-3. The app substitutes context into the template's prompt and emits the result.
-4. Copy the prompt and send it to your LLM of choice.
-5. Parse the LLM's output and paste it into the fallback form if needed.
+The two paths are deliberately interchangeable per prompt template, so a contributor can swap LLMs without changing how the prompt is built.
 
-## For Contributors
+## Repository map
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
-
-- How to run the app locally (Jekyll, Python, or Node)
-- How to create or update `PROMPT.md` templates
-- Local testing checklist
-- PR expectations
-
-## Licensing
-
-This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
+| Path | Purpose |
+|------|---------|
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to run the app locally, add or edit `PROMPT.md` prompt templates, test, and open a PR |
+| [LICENSE](./LICENSE) | MIT License |
+| [`templates/`](./templates/) | One folder per task; each contains a `PROMPT.md` and an `index.js` registry entry |
