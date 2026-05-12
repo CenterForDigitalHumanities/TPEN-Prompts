@@ -1,10 +1,13 @@
 /**
  * @file TPEN-Prompts orchestrator.
  *
- * Iframed mode: the parent pushes one `TPEN_CONTEXT` payload on iframe load
- * carrying the fully-hydrated `project`, `page`, and `canvas` objects. The
- * child renders directly from that payload — no REST round-trips, no request/
- * reply handshake. The `TPEN_ID_TOKEN` flow remains user-gated and separate.
+ * Iframed mode: the parent pushes a lean `TPEN_CONTEXT` payload on iframe
+ * load (project identity + URIs only). Prompt templates need fully-populated
+ * project/page/canvas objects, so on receipt of `TPEN_CONTEXT` we send
+ * `REQUEST_POPULATED_PROJECT` + `REQUEST_POPULATED_PAGE` upstream; the parent
+ * replies with `TPEN_POPULATED_PROJECT` and `TPEN_POPULATED_PAGE`, the
+ * MessageHandler accumulates both halves, and the child renders from the
+ * combined bundle. The `TPEN_ID_TOKEN` flow remains user-gated and separate.
  *
  * Standalone mode: reads URL params, fetches project (+ optionally page) from
  * the TPEN services API, resolves layer/column/line from the project graph.
@@ -35,18 +38,15 @@ export class PromptsApp {
     }
 
     /**
-     * Bootstrap the app. Iframed: show an awaiting screen and wait for the
-     * parent to push `TPEN_CONTEXT`. Standalone: render the id-entry form
-     * (or load directly when `projectID` is in the URL).
+     * Bootstrap the app.
      * @returns {Promise<void>}
      */
     async init() {
         const iframed = window.parent !== window
 
-        // Paint the awaiting screen SYNCHRONOUSLY, before any await. Otherwise
-        // a `TPEN_CONTEXT` message that lands during `await initTemplates()`
-        // renders the workspace, and then this init() continuation silently
-        // overwrites it with the awaiting screen.
+        // Paint synchronously before initTemplates() awaits — otherwise a
+        // populated-bundle flush that lands during the await silently
+        // overwrites this paint when init() resumes.
         if (iframed) {
             clearStoredToken()
             this.token = null
@@ -92,11 +92,11 @@ export class PromptsApp {
     }
 
     /**
-     * Accept a `TPEN_CONTEXT` payload from the parent. The payload is expected
-     * to carry hydrated `project`, `page`, and `canvas` objects; anything
-     * missing is resolved here as a safety net — REST fetches for project/page
-     * (auth required), direct HTTP for the canvas via its IIIF id on
-     * `page.target`.
+     * Accept the combined populated-bundle from the parent (assembled by
+     * `MessageHandler` from `TPEN_POPULATED_PROJECT` + `TPEN_POPULATED_PAGE`).
+     * Any field that didn't arrive is resolved here as a safety net — REST
+     * fetches for project/page (auth required), direct HTTP for the canvas
+     * via its IIIF id on `page.target`.
      * @param {{ project: any, page: any, canvas: any, currentLineId: string|null }} payload
      */
     async acceptContext(payload) {
@@ -158,7 +158,7 @@ export class PromptsApp {
 
     /**
      * Update the current line id on the rendered workspace. Called when the
-     * parent sends `UPDATE_CURRENT_LINE` in response to line navigation.
+     * parent sends `UPDATE_CURRENT_LINE` on line navigation.
      * @param {string|null} lineId full line IRI or null.
      */
     updateCurrentLine(lineId) {
