@@ -13,11 +13,9 @@ Make your edits in source files at the repository root, especially:
 
 - `templates/`: Prompt template modules and their `PROMPT.md` content
 - `main.js`, `prompt-generator.js`, `ui-manager.js`, `message-handler.js`: runtime app behavior
-- `tools/`: published generic markdown assistance docs
 
 Important:
 
-- `tools/` is for generic markdown guidance and reference docs.
 - Avoid broad edits to generated site output unless your change is specifically for published docs/pages.
 
 ## Contributing PROMPT.md Changes
@@ -44,23 +42,11 @@ Pattern to follow:
 
 ## Local Testing
 
-This project is hosted on GitHub Pages, so Jekyll is the primary way to build and serve it locally.
-
-### Option A: Jekyll (matches GitHub Pages)
-
-```bash
-jekyll s
-```
-
-Then open:
-
-- `http://localhost:4000/`
-
-If you prefer a simpler backup server for quick checks, use one of the options below.
+The app is a static HTML + ES module bundle, so any static file server works. Pick whichever is already on your machine.
 
 To test within a split-screen TPEN environment, ensure your local server can be added as a custom tool in TPEN and use the correct `{{pageEndpoint}}` placeholder value for your local server URL.
 
-### Option B: Python (backup)
+### Option A: Python
 
 ```bash
 python -m http.server 4000
@@ -70,13 +56,25 @@ Then open:
 
 - `http://localhost:4000/`
 
-### Option C: Node (backup)
+### Option B: Node
 
 ```bash
 npx serve .
 ```
 
 Then open the URL printed by the command.
+
+### Option C: Jekyll (matches GitHub Pages)
+
+Only needed if you want to reproduce the GitHub Pages build locally. Requires Ruby and the `jekyll` gem.
+
+```bash
+jekyll s
+```
+
+Then open:
+
+- `http://localhost:4000/`
 
 ## Manual Test Checklist
 
