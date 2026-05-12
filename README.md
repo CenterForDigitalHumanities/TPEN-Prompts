@@ -31,19 +31,27 @@ Select it, and the tools becomes active on the right side where you will see the
 
 Click to allow your token to be used in the prompts. Then select a prompt and click 'Generate prompt' to see it populate.  Click the copy button so it is on your clipboard ready to paste.
 
-> Click 'Copy' instead of highlighting the text and copying it yourself.
+> Click 'Copy' instead of highlighting the text and copying it yourself.  You can paste it elsewhere and edit it if desired.  Know that these prompts were tested as-is but LLMs are always evolving and changing how the process prompts and respond to users.
 
 <img width="944" height="909" alt="image" src="https://github.com/user-attachments/assets/de65f051-e1f8-4024-9315-214d401dbb40" />
 
 Now give the prompt to your favorite LLM by whatever means you prefer.  The AI will guide you on progress or next steps from there.
 
-<img width="847" height="485" alt="image" src="https://github.com/user-attachments/assets/03181000-b8d3-481d-a892-326b8818a83c" />
+<img width="1302" height="600" alt="image" src="https://github.com/user-attachments/assets/bdb9e569-3457-4bc2-a8ef-5f0fd7a6262a" />
 
-<img width="1642" height="517" alt="image" src="https://github.com/user-attachments/assets/d81e25d5-5ea6-4862-9fb9-2094daabc278" />
+In the end a report will be delivered telling you what happened.
+
+<img width="1299" height="618" alt="image" src="https://github.com/user-attachments/assets/8e64c9cb-215a-4f25-a357-6be40c1db0b9" />
+
+The new data will appear when you refresh the page in TPEN.  
+
+<img width="1914" height="972" alt="image" src="https://github.com/user-attachments/assets/87f2d2c8-9368-4262-a51a-ad5990be0041" />
+
+> Accuracy and speed of results vary greatly across the LLMs!
 
 ## Notes on usage
 
-### CLI or agent LLM with HTTP access (e.g. Claude Code, Codex, OpenCode)
+### CLI or agent LLM (e.g. Claude Code, Codex, OpenCode)
 
 The LLM tends to have HTTP capabilities in CLI environment and will generate the data through TPEN.  You will only have to provide it the prompt and can watch it do the work for you.  You will need to refresh the page in TPEN once it is finished.
 
