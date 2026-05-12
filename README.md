@@ -74,6 +74,7 @@ The LLM tends to be restricted in Web Chat environments. Expect that the LLM wil
 > These methods are deliberately interchangeable per prompt template, so a contributor can swap LLMs without changing how the prompt is built.
 
 ## Contribute new LLM prompts
+
 See [CONTRIBUTING.md](./CONTRIBUTING.md) - How to run the tool locally, add or edit `PROMPT.md` prompt templates, test, and open a PR.
 
 ## Prompt Templates
