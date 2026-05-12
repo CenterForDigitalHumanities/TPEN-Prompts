@@ -11,37 +11,35 @@ A small GitHub Pages web app that composes copy-ready prompts for TPEN manuscrip
 
 On the project management page at https://app.t-pen.org/project/manage?projectID={id_here} you will see a panel with the 'Tools' heading.
 
-{SCREENSHOT TODO}
+<img width="488" height="428" alt="image" src="https://github.com/user-attachments/assets/27ae376d-a033-4b0b-b97e-9b669873615b" />
 
 Click the 'Add Iframe Tool' button which will show an area for you to enter a new tool.
 
-{SCREENSHOT TODO}
+<img width="567" height="275" alt="image" src="https://github.com/user-attachments/assets/74546832-5b25-4502-930d-99e7c41cd437" />
 
-Enter a tool label such as 'TPEN Prompts'.  Then enter the URL for this repository's GitHub Pages deployment.  You can test it to make sure it will work, otherwise click 'Add' and the TPEN Prompts tool will be active in your project
+Enter a tool label such as 'TPEN Prompts'.  Then enter the URL for this repository's GitHub Pages deployment.  You can test it to make sure it will work, otherwise click 'Add' and the TPEN Prompts tool will be active in your project.
 
 ## How to generate and use a prompt
 
 > Make sure you have already added the tool to the project you use.
 
-Navigate to the transccription interface at https://app.t-pen.org/transcribe?projectID={id_here}.  You will see a dropdown menu of splitscreen tools, where you will see the TPEN Prompts tools with the label you provided earlier.
+Navigate to the transccription interface at https://app.t-pen.org/transcribe?projectID={id_here}.  You will see a dropdown menu of splitscreen tools, where you will see the TPEN Prompts tools with the label you provided earlier.  In the screenshot below we have no identified any lines or provided any transcription yet, so we will generate a prompt to do all that work.
 
-{Screenshot TODO}
+<img width="1919" height="1041" alt="image" src="https://github.com/user-attachments/assets/5c950448-489f-4f07-ba9a-4db31ec7d798" />
 
-Select it, and the tools becomes active on the right side where you will generate the prompt.
+Select it, and the tools becomes active on the right side where you will see the tool appear.
 
-{Screenshot TODO}
-
-Click to allow your token to be used in the prompts. Then select a prompt to see it populate and click the copy button so it is on your clipboard ready to paste.
+Click to allow your token to be used in the prompts. Then select a prompt and click 'Generate prompt' to see it populate.  Click the copy button so it is on your clipboard ready to paste.
 
 > Click 'Copy' instead of highlighting the text and copying it yourself.
 
-{Screenshot TODO}
+<img width="944" height="909" alt="image" src="https://github.com/user-attachments/assets/de65f051-e1f8-4024-9315-214d401dbb40" />
 
 Now give the prompt to your favorite LLM by whatever means you prefer.  The AI will guide you on progress or next steps from there.
 
-{Screenshot TODO}
+<img width="847" height="485" alt="image" src="https://github.com/user-attachments/assets/03181000-b8d3-481d-a892-326b8818a83c" />
 
-Pick a prompt template in the UI, generate it, and click the **Copy** button to copy the prompt to your clipboard.
+<img width="1642" height="517" alt="image" src="https://github.com/user-attachments/assets/d81e25d5-5ea6-4862-9fb9-2094daabc278" />
 
 ## Notes on usage
 
@@ -49,7 +47,7 @@ Pick a prompt template in the UI, generate it, and click the **Copy** button to 
 
 The LLM tends to have HTTP capabilities in CLI environment and will generate the data through TPEN.  You will only have to provide it the prompt and can watch it do the work for you.  You will need to refresh the page in TPEN once it is finished.
 
-### Chat LLM (e.g. chatgpt.com, claude.ai, t3.chat). 
+### Chat LLM (e.g. chatgpt.com, claude.ai, t3.chat)
 
 The LLM tends to be restricted in Web Chat environments. Expect that the LLM will follow the prompt's fallback instruction and return payload JSON for you to copy. You will take that back to the tool in TPEN and paste it into the *Couldn't Use the API? Paste JSON from LLM here* panel. It will create the TPEN data for you there and refresh the page when it is finished.  
 
